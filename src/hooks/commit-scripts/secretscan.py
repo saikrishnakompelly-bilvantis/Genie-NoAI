@@ -142,10 +142,14 @@ if __name__ == "__main__":
         return bool(diff_output.strip())  # True if diff is not empty
 
     # Automatically decide whether to scan Git diff or a file
-    if is_git_repo() and has_unstaged_changes():
-        logging.info("Detected unstaged changes in Git. Running in diff mode...")
-        results = scan_git_diff()
-    elif len(sys.argv) == 2:
+    if len(sys.argv) == 2 and sys.argv[1] == "--diff":
+        if is_git_repo() and has_unstaged_changes():
+            logging.info("Detected unstaged changes in Git. Running in diff mode...")
+            results = scan_git_diff()
+        else:
+            print("No unstaged changes found or not inside a Git repository.")
+            sys.exit(1)
+    elif len(sys.argv) == 2 and sys.argv[1] != "--diff":
         file_path = sys.argv[1]
         if not os.path.isfile(file_path):
             print(f"Error: File '{file_path}' not found.")
