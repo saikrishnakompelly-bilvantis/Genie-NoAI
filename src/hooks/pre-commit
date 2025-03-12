@@ -371,4 +371,4 @@ EOF
 )
 
 echo "$commit_metadata" > "$metadata_file"
-exit 0
+exit 1
