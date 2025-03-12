@@ -127,12 +127,25 @@ def scan_git_diff():
 
 if __name__ == "__main__":
     import json
-    print('-----',sys.argv)
-    # Prioritize `--diff` flag
-    if "--diff" in sys.argv:
-        logging.info("Scanning only changed lines in Git diff...")
+
+    def is_git_repo():
+        """Check if the script is inside a Git repository."""
+        try:
+            subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], check=True, capture_output=True)
+            return True
+        except subprocess.CalledProcessError:
+            return False
+
+    def has_unstaged_changes():
+        """Check if there are unstaged changes in Git."""
+        diff_output = subprocess.run(["git", "diff", "--unified=0", "--no-color"], capture_output=True, text=True).stdout
+        return bool(diff_output.strip())  # True if diff is not empty
+
+    # Automatically decide whether to scan Git diff or a file
+    if is_git_repo() and has_unstaged_changes():
+        logging.info("Detected unstaged changes in Git. Running in diff mode...")
         results = scan_git_diff()
-    if sys.argv[1] != "--diff":
+    elif len(sys.argv) == 2:
         file_path = sys.argv[1]
         if not os.path.isfile(file_path):
             print(f"Error: File '{file_path}' not found.")
@@ -143,7 +156,7 @@ if __name__ == "__main__":
 
         results = scan_content(content, file_path=file_path)
     else:
-        print("Usage: secretscan.py [file_path] or secretscan.py --diff")
+        print("Usage: secretscan.py [file_path] or run inside a Git repo with unstaged changes.")
         sys.exit(1)
 
     if results:

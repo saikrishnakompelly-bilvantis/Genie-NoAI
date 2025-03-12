@@ -75,7 +75,7 @@ done
 
 # Run local secret scan
 diff_content=$(git diff --cached)
-scan_results=$(echo "$diff_content" | $python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py" "--diff")
+scan_results=$(echo "$diff_content" | $python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py")
 exit_code=$?
 
 # Create combined results for UI
