@@ -126,14 +126,12 @@ def scan_git_diff():
     return all_results
 
 if __name__ == "__main__":
+    import json
+
     if "--diff" in sys.argv:
         logging.info("Scanning only changed lines in Git diff...")
         results = scan_git_diff()
-    else:
-        if len(sys.argv) < 2 or (len(sys.argv) == 2 and sys.argv[1] == '--diff'):
-            print("Usage: secretscan.py <file> [--diff]")
-            sys.exit(1)
-
+    elif len(sys.argv) == 2:
         file_path = sys.argv[1]
         if not os.path.isfile(file_path):
             print(f"Error: File '{file_path}' not found.")
@@ -143,6 +141,9 @@ if __name__ == "__main__":
             content = f.read()
 
         results = scan_content(content, file_path=file_path)
+    else:
+        print("Usage: secretscan.py [file_path] or secretscan.py --diff")
+        sys.exit(1)
 
     if results:
         print(json.dumps(results, indent=4))
