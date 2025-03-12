@@ -151,6 +151,7 @@ def create_html_report(metadata_file):
 
     <script>
     function generatePDF() {{
+        console.log("Generating PDF");
         try {{
             // Get secrets table data
             const secretsTable = document.querySelector('table:nth-of-type(2)');
