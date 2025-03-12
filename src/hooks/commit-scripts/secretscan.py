@@ -127,6 +127,10 @@ def scan_git_diff():
 
 if __name__ == "__main__":
     import json
+    import os
+    import sys
+    import logging
+    import subprocess
 
     def is_git_repo():
         """Check if the script is inside a Git repository."""
@@ -141,16 +145,17 @@ if __name__ == "__main__":
         diff_output = subprocess.run(["git", "diff", "--unified=0", "--no-color"], capture_output=True, text=True).stdout
         return bool(diff_output.strip())  # True if diff is not empty
 
-    # Automatically decide whether to scan Git diff or a file
-    if len(sys.argv) == 2 and sys.argv[1] == "--diff":
-        if is_git_repo() and has_unstaged_changes():
-            logging.info("Detected unstaged changes in Git. Running in diff mode...")
+    args = sys.argv[1:]
+
+    if "--diff" in args:
+        logging.info("Scanning only changed lines in Git diff...")
+        try:
             results = scan_git_diff()
-        else:
-            print("No unstaged changes found or not inside a Git repository.")
+        except Exception as e:
+            logging.error(f"Error scanning Git diff: {e}")
             sys.exit(1)
-    elif len(sys.argv) == 2 and sys.argv[1] != "--diff":
-        file_path = sys.argv[1]
+    elif len(args) == 1:
+        file_path = args[0]
         if not os.path.isfile(file_path):
             print(f"Error: File '{file_path}' not found.")
             sys.exit(1)
@@ -160,8 +165,13 @@ if __name__ == "__main__":
 
         results = scan_content(content, file_path=file_path)
     else:
-        print("Usage: secretscan.py [file_path] or run inside a Git repo with unstaged changes.")
-        sys.exit(1)
+        # Auto-detect mode: If in a Git repo with unstaged changes, scan Git diff
+        if is_git_repo() and has_unstaged_changes():
+            logging.info("Detected unstaged changes in Git. Running in diff mode...")
+            results = scan_git_diff()
+        else:
+            print("Usage: secretscan.py <file> or run inside a Git repo with unstaged changes.")
+            sys.exit(1)
 
     if results:
         print(json.dumps(results, indent=4))

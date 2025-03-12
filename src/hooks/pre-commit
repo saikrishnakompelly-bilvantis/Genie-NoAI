@@ -61,7 +61,6 @@ DISALLOWED_EXTENSIONS=".crt,.cer,.ca-bundle,.p7b,.p7c,.p7s,.pem,.jceks,.key,.key
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-
 # Check for disallowed file extensions
 disallowed_files=()
 IFS=',' read -ra EXTENSIONS <<< "$DISALLOWED_EXTENSIONS"
@@ -79,7 +78,7 @@ if [[ -z "$diff_content" ]]; then
     show_message_box "No changes detected in the staged files."
     exit 0
 fi
-echo $SCRIPT_DIR
+
 scan_results=$($python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py" --diff)
 exit_code=$?
 
