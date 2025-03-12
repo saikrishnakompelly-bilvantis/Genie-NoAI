@@ -79,7 +79,7 @@ if [[ -z "$diff_content" ]]; then
     show_message_box "No changes detected in the staged files."
     exit 0
 fi
-scan_results=$(echo "$diff_content" | $python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py")
+scan_results=$($python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py")
 exit_code=$?
 
 # Create combined results for UI
