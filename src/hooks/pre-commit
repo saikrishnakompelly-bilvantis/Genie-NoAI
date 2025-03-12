@@ -60,7 +60,7 @@ fi
 DISALLOWED_EXTENSIONS=".crt,.cer,.ca-bundle,.p7b,.p7c,.p7s,.pem,.jceks,.key,.keystore,.jks,.p12,.pfx"
 
 # Get the directory where this script is located
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$(git config --global --get core.hookspath)"
 # Check for disallowed file extensions
 disallowed_files=()
 IFS=',' read -ra EXTENSIONS <<< "$DISALLOWED_EXTENSIONS"
@@ -82,11 +82,18 @@ fi
 scan_results=$($python_cmd "$SCRIPT_DIR/commit-scripts/secretscan.py" --diff)
 exit_code=$?
 
+# Define a directory for temporary files within the hooks directory
+TEMP_DIR="$SCRIPT_DIR/temp"
+mkdir -p "$TEMP_DIR"
+
+# Clean up the temp directory before creating new files
+rm -f "$TEMP_DIR"/*
+
 # Create combined results for UI
 if [ $exit_code -eq 1 ] || [ ${#disallowed_files[@]} -gt 0 ]; then
     # Save scan results and disallowed files to temporary files
-    temp_json_file=$(mktemp)
-    temp_disallowed_file=$(mktemp)
+    temp_json_file=$(mktemp "$TEMP_DIR/secrets.XXXXXX.json") || { echo "Failed to create temp file for secrets"; exit 1; }
+    temp_disallowed_file=$(mktemp "$TEMP_DIR/disallowed.XXXXXX.json") || { echo "Failed to create temp file for disallowed files"; exit 1; }
     
     # Save secrets scan results
     echo "$scan_results" > "$temp_json_file"
@@ -123,7 +130,7 @@ class ReviewWindow:
     def show_secrets_window(self, secrets_data):
         if not secrets_data:
             return
-            
+        
         root = create_window("Secrets Found - Genie GitHooks")
         self.windows.append(root)
         
@@ -151,10 +158,10 @@ class ReviewWindow:
         
         # Insert secrets information
         for item in secrets_data:
-            text_widget.insert(tk.END, "━" * 50 + "\\n")
-            text_widget.insert(tk.END, f"File: {item['file']}\\n")
-            text_widget.insert(tk.END, f"Pattern: {item['pattern']}\\n")
-            text_widget.insert(tk.END, f"Line {item['line_number']}: {item['line']}\\n\\n")
+            text_widget.insert(tk.END, "━" * 50 + "\n")
+            text_widget.insert(tk.END, f"File: {item['file']}\n")
+            text_widget.insert(tk.END, f"Pattern: {item['pattern']}\n")
+            text_widget.insert(tk.END, f"Line {item['line_number']}: {item['line']}\n\n")
         
         text_widget.configure(state='disabled')  # Make text read-only
         
@@ -191,7 +198,7 @@ class ReviewWindow:
     def show_disallowed_files_window(self, disallowed_files):
         if not disallowed_files:
             return
-            
+        
         root = create_window("Disallowed Files - Genie GitHooks", width=600, height=400)
         self.windows.append(root)
         
@@ -218,9 +225,9 @@ class ReviewWindow:
         text_widget.configure(yscrollcommand=scrollbar.set)
         
         # Insert files information
-        text_widget.insert(tk.END, "The following files have disallowed extensions:\\n\\n")
+        text_widget.insert(tk.END, "The following files have disallowed extensions:\n\n")
         for file in disallowed_files:
-            text_widget.insert(tk.END, f"• {file}\\n")
+            text_widget.insert(tk.END, f"• {file}\n")
         
         text_widget.configure(state='disabled')
         
@@ -343,8 +350,6 @@ except Exception as e:
     print("N")  # Default to No on any error
 EOF
 )
-    # Clean up temporary files
-    rm -f "$temp_json_file" "$temp_disallowed_file"
 
     if [[ "$user_input" != "Y" ]]; then
         exit 1
@@ -363,7 +368,8 @@ else
 fi
 
 # Save metadata for post-commit hook
-metadata_file=".commit_metadata.json"
+metadata_file="$SCRIPT_DIR/.commit_metadata.json"
+echo "Metadata file: $metadata_file"
 commit_metadata=$(cat <<EOF
 {
     "has_secrets": $has_secrets,
@@ -375,4 +381,4 @@ EOF
 )
 
 echo "$commit_metadata" > "$metadata_file"
-exit 1
+exit 0

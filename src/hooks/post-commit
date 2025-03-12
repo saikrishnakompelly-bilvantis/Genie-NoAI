@@ -11,323 +11,52 @@ fi
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(git config --global --get core.hookspath)"
+COMMIT_SCRIPTS_DIR="$SCRIPT_DIR/commit-scripts"
 REPORTS_DIR="$SCRIPT_DIR/.commit-reports"
+METADATA_FILE="$SCRIPT_DIR/.commit_metadata.json"
+
+echo "Post Metadata file: $METADATA_FILE"
 
 # Create reports directory if it doesn't exist
 mkdir -p "$REPORTS_DIR"
-
-# Read the metadata file
-METADATA_FILE=".commit_metadata.json"
 
 if [ ! -f "$METADATA_FILE" ]; then
     echo "No commit metadata found."
     exit 0
 fi
 
-# Display the results in HTML
-$python_cmd - "$METADATA_FILE" "$REPORTS_DIR" <<EOF
+# Ensure Python can find the commit-scripts module
+export PYTHONPATH="$COMMIT_SCRIPTS_DIR:$PYTHONPATH"
+
+# Run the Python script
+$python_cmd <<EOF
 import json
-import sys
 import os
-from datetime import datetime
-import webbrowser
+import sys
+
+# Set up paths
+commit_scripts_dir = os.environ.get("COMMIT_SCRIPTS_DIR", "$COMMIT_SCRIPTS_DIR")
+metadata_file = "$METADATA_FILE"
+reports_dir = "$REPORTS_DIR"
+
+sys.path.insert(0, commit_scripts_dir)
+
+from secretscan import generate_html_report  # Importing correctly
 
 try:
-    with open(metadata_file, 'r') as f:
-        metadata = json.load(f)
-        secrets_found = metadata['secrets_found']
-        print(secrets_found)
-        disallowed_files = metadata['disallowed_files']
-        print(disallowed_files)
-    except Exception as e:
-        print(f"Error reading metadata file: {e}")
-        return None
+    with open(metadata_file, "r") as f:
+        metadata = json.load(f)  # Correct way to load JSON from a file
+except FileNotFoundError:
+    print(f"Error: Metadata file '{metadata_file}' not found.")
+    sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"Error parsing JSON file '{metadata_file}': {e}")
+    sys.exit(1)  # Exit if JSON is invalid
 
-# Get the no-browser flag from environment
-NO_BROWSER = True  # Always set to True to prevent automatic browser opening
-
-def create_html(results_file, disallowed_files_list):
-    try:
-        with open(results_file, 'r') as f:
-            results_data = json.load(f)
-    except Exception as e:
-        print(f"Error reading results file: {e}")
-        return None
-
-    # Read disallowed files if they exist
-    disallowed_files = []
-    if os.path.exists(disallowed_files_list) and os.path.getsize(disallowed_files_list) > 0:
-        with open(disallowed_files_list, 'r') as f:
-            disallowed_files = [line.strip() for line in f.readlines()]
-
-    def mask_secret(secret, visible_chars=3):
-        if not secret:
-            return ""
-        secret = str(secret)
-        if len(secret) <= visible_chars * 2:
-            return secret
-        return f"{secret[:visible_chars]}{'*' * (len(secret) - visible_chars * 2)}{secret[-visible_chars:]}"
-
-    secrets_table_rows = "".join(
-        f"""<tr>
-            <td class="sno">{i}</td>
-            <td class="filename">{html.escape(data.get('file', ''))}</td>
-            <td class="line-number">{data.get('line_number', '')}</td>
-            <td class="secret"><div class="secret-content">{html.escape(mask_secret(data.get('line', '')))}</div></td>
-        </tr>"""
-        for i, data in enumerate(results_data, 1)
-    )
-
-    disallowed_files_section = ""
-    if disallowed_files:
-        disallowed_files_section = f"""
-        <div id="disallowedFilesFound">
-            <h2>Disallowed Files Found:</h2>
-            <table id="disallowedFilesTable">
-                <tr>
-                    <th style="width:5%">S.No</th>
-                    <th style="width:95%">Filename</th>
-                </tr>
-                {''.join(f'<tr><td class="sno">{i}</td><td class="disallowed-file">{html.escape(file)}</td></tr>' for i, file in enumerate(disallowed_files, 1))}
-            </table>
-        </div>
-        """
-
-    # Add author and scan date to the HTML content
-    # author_info = f"<p><strong>Author:</strong> {$GIT_AUTHOR}</p>"
-    author_info = subprocess.check_output(['git', 'config', 'user.name']).decode('utf-8').strip()
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    scan_date_info = f"<p><strong>Scan Date:</strong> {timestamp}</p>"
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Repository Scan Results</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/pdfmake.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/vfs_fonts.js"></script>
-    <style>
-        body {{ font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f5f5f5; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-        .header-info {{ 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 5px; 
-            margin-bottom: 20px;
-            border-left: 4px solid #07439C;
-        }}
-        .header-info p {{ 
-            margin: 5px 0; 
-            color: #666;
-            font-size: 14px;
-        }}
-        .header-info strong {{ 
-            color: #333;
-            margin-right: 5px;
-        }}
-        table {{ 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
-            table-layout: fixed;
-        }}
-        th, td {{ 
-            padding: 12px; 
-            text-align: left; 
-            border: 1px solid #ddd;
-            vertical-align: top;
-            overflow-wrap: break-word;
-            word-wrap: break-word;
-            word-break: break-all;
-            hyphens: auto;
-        }}
-        th {{ background: #07439C; color: white; }}
-        tr:nth-child(even) {{ background: #f9f9f9; }}
-        .secret-content {{ 
-            color: #d32f2f; 
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-width: 100%;
-            display: block;
-            overflow-x: auto;
-            padding: 4px 8px;
-            margin: 0;
-            border-radius: 4px;
-            background: rgba(211, 47, 47, 0.05);
-        }}
-        .line-number {{ 
-            color: #e74c3c; 
-            font-weight: bold; 
-            text-align: center;
-        }}
-        .disallowed-file {{
-            color: #e74c3c;
-            font-family: monospace;
-        }}
-        .sno {{
-            text-align: center;
-        }}
-        h1, h2 {{ color: #07439C; margin-bottom: 20px; }}
-        .download-btn {{
-            padding: 10px 20px;
-            background-color: #07439C;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-bottom: 20px;
-        }}
-        .download-btn:hover {{
-            background-color: #053278;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>Repository Scan Results</h1>
-            <button id="downloadButton" class="download-btn">Download as PDF</button>
-        </div>
-        <div class="header-info">
-            {author_info}
-            {scan_date_info}
-        </div>
-        {disallowed_files_section}
-        <h2>Potential Secrets Found:</h2>
-        <table id="secretsTable">
-            <tr>
-                <th style="width:5%">S.No</th>
-                <th style="width:25%">Filename</th>
-                <th style="width:10%">Line #</th>
-                <th style="width:60%">Secret</th>
-            </tr>
-            {secrets_table_rows}
-        </table>
-    </div>
-    <script>
-    document.getElementById("downloadButton").addEventListener("click", () => {{
-        // Get secrets table data
-        const secretsTable = document.getElementById("secretsTable");
-        const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
-        const secrets = Array.from(secretRows).map((row, index) => {{
-            const cells = row.querySelectorAll("td");
-            return {{
-                sno: cells[0]?.innerText || "",
-                filename: cells[1]?.innerText || "",
-                lineNumber: cells[2]?.innerText || "",
-                secret: cells[3]?.innerText || ""
-            }};
-        }});
-
-        // Get disallowed files data if it exists
-        const disallowedFilesSection = document.getElementById("disallowedFilesFound");
-        const disallowedRows = disallowedFilesSection ? 
-            Array.from(disallowedFilesSection.querySelectorAll("tr:not(:first-child)")) : [];
-        const disallowedFiles = disallowedRows.map(row => {{
-            const cells = row.querySelectorAll("td");
-            return {{
-                sno: cells[0]?.innerText || "",
-                filename: cells[1]?.innerText || ""
-            }};
-        }});
-
-        // Create file name using current date
-        const currentDate = new Date();
-        const formattedDate = currentDate.toLocaleDateString('en-GB', {{
-            day: '2-digit', month: 'short', year: 'numeric'
-        }}).replace(' ', '_').replace(',', '');
-        const fileName = 'repo_scan_' + formattedDate + '.pdf';
-
-        // Create the PDF document definition
-        const docDefinition = {{
-            pageOrientation: 'landscape',
-            content: [
-                {{ text: 'Repository Scan Results', style: 'header' }},
-                // Disallowed Files Section
-                ...(disallowedFiles.length ? [
-                    {{ text: 'Disallowed Files Found:', style: 'subheader' }},
-                    {{
-                        table: {{
-                            headerRows: 1,
-                            widths: ['5%', '95%'],
-                            body: [
-                                [
-                                    {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                    {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }}
-                                ],
-                                ...disallowedFiles.map(file => [
-                                    {{ text: file.sno, alignment: 'center' }},
-                                    {{ text: file.filename }}
-                                ])
-                            ]
-                        }},
-                        margin: [0, 0, 0, 20]
-                    }}
-                ] : []),
-                // Secrets Section
-                {{ text: 'Potential Secrets Found:', style: 'subheader' }},
-                {{
-                    table: {{
-                        headerRows: 1,
-                        widths: ['5%', '25%', '10%', '60%'],
-                        body: [
-                            [
-                                {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }},
-                                {{ text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Secret', fillColor: '#E9E5E5', bold: true }}
-                            ],
-                            ...secrets.map((secret, index) => [
-                                {{ text: secret.sno, alignment: 'center' }},
-                                secret.filename,
-                                {{ text: secret.lineNumber, alignment: 'center' }},
-                                secret.secret
-                            ])
-                        ]
-                    }}
-                }}
-            ],
-            styles: {{
-                header: {{
-                    fontSize: 18,
-                    bold: true,
-                    alignment: 'center',
-                    margin: [0, 0, 0, 10]
-                }},
-                subheader: {{
-                    fontSize: 14,
-                    bold: true,
-                    margin: [0, 10, 0, 5]
-                }}
-            }}
-        }};
-
-        // Generate and download the PDF
-        pdfMake.createPdf(docDefinition).download(fileName);
-    }});
-    </script>
-</body>
-</html>"""
-
-results_file = '''$results_file'''
-reports_dir = '''$REPORTS_DIR'''
-print(reports_dir)
-disallowed_files_list = '''$DISALLOWED_FILES_LIST'''
-os.environ['GIT_AUTHOR'] = '''$GIT_AUTHOR'''
-os.environ['TIMESTAMP'] = '''$TIMESTAMP'''
-
-if os.path.exists(results_file):
-    html_content = create_html(secrets_found, disallowed_files)
-    if html_content:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        html_report = os.path.join(reports_dir, f'scan_report_{timestamp}.html')
-        with open(html_report, 'w') as f:
-            f.write(html_content)
-        print(f"\nReport saved to: {html_report}")
-        webbrowser.open('file://' + os.path.abspath(html_report))
-# Clean up metadata file
-os.remove(metadata_file)
+output_path = os.path.join(reports_dir, "commit-scan-report.html")
+generate_html_report(output_path, metadata=metadata)
 EOF
 
-# Make the script executable
-chmod +x "$0"
+# 🔥 Cleanup: Remove metadata file after use
+rm -f "$METADATA_FILE"
+echo "Metadata file removed: $METADATA_FILE"
