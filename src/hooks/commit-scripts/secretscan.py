@@ -127,7 +127,7 @@ def scan_git_diff():
 
 if __name__ == "__main__":
     import json
-
+    print(sys.argv)
     # Prioritize `--diff` flag
     if "--diff" in sys.argv:
         logging.info("Scanning only changed lines in Git diff...")
