@@ -18,3 +18,6 @@ GenieApp/
 ├── requirements.txt      # Python dependencies
 ├── README.md            # Project documentation
 └── structure.txt        # This file structure document 
+
+secret
+password

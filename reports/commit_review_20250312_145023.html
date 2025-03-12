@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Commit Review Results</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+    <style>
+        body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .commit-info { 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin-bottom: 20px;
+            border-left: 4px solid #07439C;
+        }
+        .commit-info p { margin: 5px 0; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+            table-layout: fixed;
+        }
+        th, td { 
+            padding: 12px; 
+            text-align: left; 
+            border: 1px solid #ddd;
+            vertical-align: top;
+            overflow-wrap: break-word;
+        }
+        th { background: #07439C; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .secret-content { 
+            color: #d32f2f; 
+            font-family: monospace;
+            white-space: pre-wrap;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(211, 47, 47, 0.05);
+        }
+        .line-number { color: #e74c3c; font-weight: bold; text-align: center; }
+        .sno { text-align: center; }
+        h1, h2 { color: #07439C; margin-bottom: 20px; }
+        .download-btn {
+            padding: 10px 20px;
+            background-color: #07439C;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .download-btn:hover { background-color: #053278; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Commit Review Results</h1>
+            <button id="downloadButton" class="download-btn">Download as PDF</button>
+        </div>
+        
+        <div class="commit-info">
+            <p><strong>Commit Hash:</strong> 90c2b1960ddefaf1220f81e925045eec0ab58a60</p>
+            <p><strong>Author:</strong> saikrishnakompelly-bilvantis</p>
+            <p><strong>Date:</strong> Wed Mar 12 14:50:22 2025</p>
+            <p><strong>Message:</strong> Add PDF download logging and improve commit review report generation</p>
+        </div>
+
+        <h2>Disallowed Files:</h2>
+        <table>
+            <tr>
+                <th style="width:5%">S.No</th>
+                <th style="width:95%">Filename</th>
+            </tr>
+            <tr><td colspan='2' style='text-align: center;'>No disallowed files</td></tr>
+        </table>
+
+        <h2>Potential Secrets:</h2>
+        <table>
+            <tr>
+                <th style="width:5%">S.No</th>
+                <th style="width:25%">Filename</th>
+                <th style="width:10%">Line #</th>
+                <th style="width:60%">Secret</th>
+            </tr>
+            <tr><td colspan='4' style='text-align: center;'>No secrets found</td></tr>
+        </table>
+    </div>
+
+    <script>
+    document.getElementById("downloadButton").addEventListener("click", function() {
+        // Get the tables content
+        const secretsTable = document.querySelector('table:nth-of-type(2)');
+        const disallowedTable = document.querySelector('table:nth-of-type(1)');
+        
+        // Get commit info
+        const commitInfo = {
+            hash: document.querySelector('.commit-info p:nth-child(1)').textContent.split(': ')[1],
+            author: document.querySelector('.commit-info p:nth-child(2)').textContent.split(': ')[1],
+            date: document.querySelector('.commit-info p:nth-child(3)').textContent.split(': ')[1],
+            message: document.querySelector('.commit-info p:nth-child(4)').textContent.split(': ')[1]
+        };
+
+        // Function to convert table to array
+        function tableToArray(table) {
+            return Array.from(table.querySelectorAll('tr')).map(row => {
+                return Array.from(row.querySelectorAll('th, td')).map(cell => {
+                    return {
+                        text: cell.textContent.trim(),
+                        style: cell.tagName === 'TH' ? 'tableHeader' : '',
+                        fillColor: cell.tagName === 'TH' ? '#07439C' : null,
+                        color: cell.tagName === 'TH' ? '#ffffff' : null
+                    };
+                });
+            });
+        }
+
+        const docDefinition = {
+            pageOrientation: 'landscape',
+            content: [
+                { text: 'Commit Review Results', style: 'header' },
+                { text: 'Commit Information', style: 'subheader', margin: [0, 10, 0, 5] },
+                {
+                    style: 'commitInfo',
+                    table: {
+                        widths: ['*'],
+                        body: [[
+                            {
+                                stack: [
+                                    { text: 'Commit Hash: ' + commitInfo.hash },
+                                    { text: 'Author: ' + commitInfo.author },
+                                    { text: 'Date: ' + commitInfo.date },
+                                    { text: 'Message: ' + commitInfo.message }
+                                ],
+                                margin: [0, 5, 0, 5]
+                            }
+                        ]],
+                    },
+                    layout: 'lightHorizontalLines'
+                },
+                { text: 'Disallowed Files', style: 'subheader', margin: [0, 15, 0, 5] },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['10%', '90%'],
+                        body: tableToArray(disallowedTable)
+                    }
+                },
+                { text: 'Potential Secrets', style: 'subheader', margin: [0, 15, 0, 5] },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['5%', '25%', '10%', '60%'],
+                        body: tableToArray(secretsTable)
+                    }
+                }
+            ],
+            styles: {
+                header: {
+                    fontSize: 18,
+                    bold: true,
+                    alignment: 'center',
+                    margin: [0, 0, 0, 20]
+                },
+                subheader: {
+                    fontSize: 14,
+                    bold: true,
+                    color: '#07439C'
+                },
+                tableHeader: {
+                    bold: true,
+                    fontSize: 12
+                },
+                commitInfo: {
+                    margin: [0, 0, 0, 20]
+                }
+            },
+            defaultStyle: {
+                fontSize: 10
+            }
+        };
+
+        try {
+            const fileName = 'commit_review_' + new Date().toISOString().split('T')[0] + '.pdf';
+            pdfMake.createPdf(docDefinition).download(fileName);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Error generating PDF. Please check the console for details.');
+        }
+    });
+    </script>
+</body>
+</html>
