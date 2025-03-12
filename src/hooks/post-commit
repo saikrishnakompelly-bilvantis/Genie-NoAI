@@ -1,39 +1,32 @@
-#!/bin/bash
+#!/usr/bin/env python3
 
-# Check Python availability
-if command -v python3 > /dev/null 2>&1; then
-   python_cmd="python3"
-elif command -v python > /dev/null 2>&1; then
-   python_cmd="python"
-else
-   echo "WARNING: Python3 is not installed. Commit review functionality will not work."
-   exit 1
-fi
-
-# Get the directory where this script is located
-SCRIPT_DIR="$(git config --global --get core.hookspath)"
-REPORTS_DIR="$SCRIPT_DIR/.commit-reports"
-
-# Create reports directory if it doesn't exist
-mkdir -p "$REPORTS_DIR"
-
-# Read the metadata file
-METADATA_FILE=".commit_metadata.json"
-
-if [ ! -f "$METADATA_FILE" ]; then
-    echo "No commit metadata found."
-    exit 0
-fi
-
-# Display the results in HTML
-$python_cmd - "$METADATA_FILE" <<EOF
 import json
-import sys
 import os
+import sys
 from datetime import datetime
 import webbrowser
+from pathlib import Path
 
-def create_html(metadata_file):
+def get_git_info():
+    """Get git commit information in a platform-independent way"""
+    import subprocess
+    
+    def run_git_command(cmd):
+        try:
+            result = subprocess.run(['git'] + cmd, capture_output=True, text=True, check=True)
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            return ""
+
+    return {
+        'hash': run_git_command(['rev-parse', 'HEAD']),
+        'message': run_git_command(['log', '-1', '--pretty=%B']),
+        'author': run_git_command(['log', '-1', '--pretty=%an']),
+        'date': run_git_command(['log', '-1', '--pretty=%ad', '--date=local'])
+    }
+
+def create_html_report(metadata_file):
+    """Create HTML report from metadata"""
     try:
         with open(metadata_file, 'r') as f:
             metadata = json.load(f)
@@ -42,11 +35,8 @@ def create_html(metadata_file):
         return None
 
     # Get commit information
-    commit_hash = os.popen('git rev-parse HEAD').read().strip()
-    commit_msg = os.popen('git log -1 --pretty=%B').read().strip()
-    commit_author = os.popen('git log -1 --pretty=%an').read().strip()
-    commit_date = os.popen('git log -1 --pretty=%ad --date=local').read().strip()
-
+    git_info = get_git_info()
+    
     secrets_found = metadata.get('secrets_found', [])
     disallowed_files = metadata.get('disallowed_files', [])
 
@@ -68,7 +58,7 @@ def create_html(metadata_file):
         for i, file in enumerate(disallowed_files, 1)
     ) if disallowed_files else "<tr><td colspan='2' style='text-align: center;'>No disallowed files</td></tr>"
 
-    return f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -128,14 +118,14 @@ def create_html(metadata_file):
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h1>Commit Review Results</h1>
-            <button id="downloadButton" class="download-btn">Download as PDF</button>
+            <button id="downloadButton" class="download-btn" onclick="generatePDF()">Download as PDF</button>
         </div>
         
         <div class="commit-info">
-            <p><strong>Commit Hash:</strong> {commit_hash}</p>
-            <p><strong>Author:</strong> {commit_author}</p>
-            <p><strong>Date:</strong> {commit_date}</p>
-            <p><strong>Message:</strong> {commit_msg}</p>
+            <p><strong>Commit Hash:</strong> {git_info['hash']}</p>
+            <p><strong>Author:</strong> {git_info['author']}</p>
+            <p><strong>Date:</strong> {git_info['date']}</p>
+            <p><strong>Message:</strong> {git_info['message']}</p>
         </div>
 
         <h2>Disallowed Files:</h2>
@@ -160,7 +150,7 @@ def create_html(metadata_file):
     </div>
 
     <script>
-    document.getElementById("downloadButton").addEventListener("click", function() {{
+    function generatePDF() {{
         // Get the tables content
         const secretsTable = document.querySelector('table:nth-of-type(2)');
         const disallowedTable = document.querySelector('table:nth-of-type(1)');
@@ -252,39 +242,55 @@ def create_html(metadata_file):
             }}
         }};
 
-        try {{
-            const fileName = 'commit_review_' + new Date().toISOString().split('T')[0] + '.pdf';
-            pdfMake.createPdf(docDefinition).download(fileName);
-        }} catch (error) {{
-            console.error('Error generating PDF:', error);
-            alert('Error generating PDF. Please check the console for details.');
-        }}
-    }});
+        // Generate and download PDF
+        const fileName = `commit-review-${commitInfo.hash.substring(0, 7)}.pdf`;
+        pdfMake.createPdf(docDefinition).download(fileName);
+    }}
     </script>
 </body>
 </html>"""
 
-metadata_file = sys.argv[1]
-if os.path.exists(metadata_file):
-    html_content = create_html(metadata_file)
-    if html_content:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        html_report = os.path.join(os.path.dirname(metadata_file), f'reports/commit_review_{timestamp}.html')
-        os.makedirs(os.path.dirname(html_report), exist_ok=True)
-        with open(html_report, 'w') as f:
+    return html_content
+
+def main():
+    # Get the git hooks directory
+    try:
+        import subprocess
+        hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hookspath'],
+                                  capture_output=True, text=True, check=True).stdout.strip()
+    except subprocess.CalledProcessError:
+        hooks_path = os.path.dirname(os.path.abspath(__file__))
+
+    # Create reports directory
+    reports_dir = os.path.join(hooks_path, '.commit-reports')
+    os.makedirs(reports_dir, exist_ok=True)
+
+    # Check for metadata file
+    metadata_file = ".commit_metadata.json"
+    if not os.path.exists(metadata_file):
+        print("No commit metadata found.")
+        sys.exit(0)
+
+    # Generate HTML report
+    html_content = create_html_report(metadata_file)
+    if not html_content:
+        print("Failed to generate report.")
+        sys.exit(1)
+
+    # Save HTML report
+    git_info = get_git_info()
+    report_file = os.path.join(reports_dir, f"commit-review-{git_info['hash'][:7]}.html")
+    
+    try:
+        with open(report_file, 'w') as f:
             f.write(html_content)
-        webbrowser.open('file://' + os.path.abspath(html_report))
-        print(f"\nCommit review report saved to: {html_report}")
+        print(f"\nCommit review report generated: {report_file}")
         
-        # Clean up old reports (keep last 5)
-        reports_dir = os.path.dirname(html_report)
-        reports = sorted([f for f in os.listdir(reports_dir) if f.startswith('commit_review_')], reverse=True)
-        for old_report in reports[5:]:
-            os.remove(os.path.join(reports_dir, old_report))
+        # Open the report in browser
+        webbrowser.open('file://' + os.path.abspath(report_file))
+    except Exception as e:
+        print(f"Error saving report: {e}")
+        sys.exit(1)
 
-# Clean up metadata file
-os.remove(metadata_file)
-EOF
-
-# Make the script executable
-chmod +x "$0" 
+if __name__ == '__main__':
+    main() 
