@@ -159,105 +159,121 @@ def create_html(metadata_file):
     </div>
 
     <script>
-    document.getElementById("downloadButton").addEventListener("click", () => {{
+    document.getElementById("downloadButton").addEventListener("click", () => {
         // Get secrets table data
         const secretsTable = document.getElementById("secretsTable");
         const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
-        const secrets = Array.from(secretRows).map((row, index) => {{
-            const cells = row.querySelectorAll("td");
-            return {{
-                sno: cells[0]?.innerText || "",
-                filename: cells[1]?.innerText || "",
-                lineNumber: cells[2]?.innerText || "",
-                secret: cells[3]?.innerText || ""
-            }};
-        }});
+        const secrets = Array.from(secretRows)
+            .filter(row => row.querySelectorAll("td").length === 4) // Only include rows with all cells
+            .map(row => {
+                const cells = row.querySelectorAll("td");
+                return {
+                    sno: cells[0]?.innerText?.trim() || "",
+                    filename: cells[1]?.innerText?.trim() || "",
+                    lineNumber: cells[2]?.innerText?.trim() || "",
+                    secret: cells[3]?.innerText?.trim() || ""
+                };
+            })
+            .filter(secret => secret.filename && secret.secret); // Filter out empty entries
 
-        // Get disallowed files data if it exists
+        // Get disallowed files data
         const disallowedFilesTable = document.getElementById("disallowedFilesTable");
         const disallowedRows = disallowedFilesTable.querySelectorAll("tr:not(:first-child)");
-        const disallowedFiles = Array.from(disallowedRows).map(row => {{
-            const cells = row.querySelectorAll("td");
-            return {{
-                sno: cells[0]?.innerText || "",
-                filename: cells[1]?.innerText || ""
-            }};
-        }});
+        const disallowedFiles = Array.from(disallowedRows)
+            .filter(row => row.querySelectorAll("td").length === 2) // Only include rows with all cells
+            .map(row => {
+                const cells = row.querySelectorAll("td");
+                return {
+                    sno: cells[0]?.innerText?.trim() || "",
+                    filename: cells[1]?.innerText?.trim() || ""
+                };
+            })
+            .filter(file => file.filename); // Filter out empty entries
 
         // Create file name using current date
         const currentDate = new Date();
-        const formattedDate = currentDate.toLocaleDateString('en-GB', {{
+        const formattedDate = currentDate.toLocaleDateString('en-GB', {
             day: '2-digit', month: 'short', year: 'numeric'
-        }}).replace(' ', '_').replace(',', '');
+        }).replace(' ', '_').replace(',', '');
         const fileName = 'commit_review_' + formattedDate + '.pdf';
 
         // Create the PDF document definition
-        const docDefinition = {{
+        const docDefinition = {
             pageOrientation: 'landscape',
             content: [
-                {{ text: 'Commit Review Results', style: 'header' }},
+                { text: 'Commit Review Results', style: 'header' },
                 // Disallowed Files Section
-                ...(disallowedFiles.length ? [
-                    {{ text: 'Disallowed Files Found:', style: 'subheader' }},
-                    {{
-                        table: {{
+                ...(disallowedFiles.length > 0 ? [
+                    { text: 'Disallowed Files Found:', style: 'subheader' },
+                    {
+                        table: {
                             headerRows: 1,
                             widths: ['5%', '95%'],
                             body: [
                                 [
-                                    {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                    {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }}
+                                    { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                    { text: 'Filename', fillColor: '#E9E5E5', bold: true }
                                 ],
                                 ...disallowedFiles.map(file => [
-                                    {{ text: file.sno, alignment: 'center' }},
-                                    {{ text: file.filename }}
+                                    { text: file.sno, alignment: 'center' },
+                                    { text: file.filename }
                                 ])
                             ]
-                        }},
+                        },
                         margin: [0, 0, 0, 20]
-                    }}
-                ] : []),
+                    }
+                ] : [
+                    { text: 'Disallowed Files Found:', style: 'subheader' },
+                    { text: 'No disallowed files found.', style: 'normal' },
+                    { text: '', margin: [0, 0, 0, 20] }
+                ]),
                 // Secrets Section
-                {{ text: 'Potential Secrets Found:', style: 'subheader' }},
-                {{
-                    table: {{
+                { text: 'Potential Secrets Found:', style: 'subheader' },
+                ...(secrets.length > 0 ? [{
+                    table: {
                         headerRows: 1,
                         widths: ['5%', '25%', '10%', '60%'],
                         body: [
                             [
-                                {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }},
-                                {{ text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Secret', fillColor: '#E9E5E5', bold: true }}
+                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Filename', fillColor: '#E9E5E5', bold: true },
+                                { text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Secret', fillColor: '#E9E5E5', bold: true }
                             ],
-                            ...secrets.map((secret, index) => [
-                                {{ text: secret.sno, alignment: 'center' }},
+                            ...secrets.map(secret => [
+                                { text: secret.sno, alignment: 'center' },
                                 secret.filename,
-                                {{ text: secret.lineNumber, alignment: 'center' }},
+                                { text: secret.lineNumber, alignment: 'center' },
                                 secret.secret
                             ])
                         ]
-                    }}
-                }}
+                    }
+                }] : [
+                    { text: 'No secrets found.', style: 'normal' }
+                ])
             ],
-            styles: {{
-                header: {{
+            styles: {
+                header: {
                     fontSize: 18,
                     bold: true,
                     alignment: 'center',
                     margin: [0, 0, 0, 10]
-                }},
-                subheader: {{
+                },
+                subheader: {
                     fontSize: 14,
                     bold: true,
                     margin: [0, 10, 0, 5]
-                }}
-            }}
-        }};
+                },
+                normal: {
+                    fontSize: 12,
+                    margin: [0, 5, 0, 5]
+                }
+            }
+        };
 
         // Generate and download the PDF
         pdfMake.createPdf(docDefinition).download(fileName);
-    }});
+    });
     </script>
 </body>
 </html>"""
