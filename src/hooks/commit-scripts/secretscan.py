@@ -130,7 +130,7 @@ if __name__ == "__main__":
         logging.info("Scanning only changed lines in Git diff...")
         results = scan_git_diff()
     else:
-        if len(sys.argv) < 2:
+        if len(sys.argv) < 2 or (len(sys.argv) == 2 and sys.argv[1] == '--diff'):
             print("Usage: secretscan.py <file> [--diff]")
             sys.exit(1)
 
