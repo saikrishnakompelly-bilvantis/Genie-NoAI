@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Genie - Secret Scanning Tool</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-container">
+        <header>
+            <img src="../assets/logo.png" alt="Genie Logo" class="logo-small">
+            <h1>Genie - Secret Scanning Tool</h1>
+        </header>
+        <div class="actions">
+            <button onclick="sendMessage('action:scan')" class="primary">
+                Scan Repository
+            </button>
+            <button onclick="sendMessage('action:uninstall')" class="warning">
+                Uninstall Hooks
+            </button>
+        </div>
+        <div id="results" class="results-container">
+            <!-- Scan results will be displayed here -->
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 

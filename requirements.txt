@@ -1,0 +1,7 @@
+PyQt6
+PyQt6-Qt6
+PyQt6-WebEngine
+PyQt6-WebEngine-Qt6
+PyQt6-sip
+pyinstaller
+pyinstaller-hooks-contrib

@@ -1,0 +1,20 @@
+GenieApp/
+├── src/
+│   ├── assets/
+│   │   ├── logo.svg
+│   │   ├── logo.icns        # macOS app icon
+│   │   └── logo.ico         # Windows app icon
+│   ├── hooks/
+│   │   └── git_hooks/       # Git hook scripts
+│   ├── ui/
+│   │   ├── styles/         # CSS and styling files
+│   │   └── templates/      # HTML templates
+│   └── main.py             # Main application file
+├── build/                  # Build artifacts (generated)
+├── dist/                  # Distribution files (generated)
+│   └── Genie.app          # macOS bundle (generated)
+├── genie.spec             # PyInstaller specification
+├── build.py              # Build script (optional)
+├── requirements.txt      # Python dependencies
+├── README.md            # Project documentation
+└── structure.txt        # This file structure document 

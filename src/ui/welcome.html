@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Welcome to Genie</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="welcome-container">
+        <img src="../assets/logo.png" alt="Genie Logo" class="logo">
+        <h1>Welcome to Genie</h1>
+        <p class="description">
+            Genie is a powerful secret scanning tool that helps you prevent 
+            sensitive information from being committed to your Git repositories.
+        </p>
+        <div class="features">
+            <h2>Features:</h2>
+            <ul>
+                <li>Automatic pre-commit scanning</li>
+                <li>Repository-wide secret detection</li>
+                <li>Support for multiple secret patterns</li>
+                <li>Beautiful HTML reports</li>
+            </ul>
+        </div>
+        <div class="buttons">
+            <button onclick="sendMessage('action:install')" class="primary">
+                Install Hooks
+            </button>
+            <button onclick="sendMessage('action:exit')" class="secondary">
+                Exit
+            </button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
