@@ -132,7 +132,7 @@ if __name__ == "__main__":
     if "--diff" in sys.argv:
         logging.info("Scanning only changed lines in Git diff...")
         results = scan_git_diff()
-    elif len(sys.argv) == 2 and sys.argv[1] != "--diff":
+    if sys.argv[1] != "--diff":
         file_path = sys.argv[1]
         if not os.path.isfile(file_path):
             print(f"Error: File '{file_path}' not found.")
