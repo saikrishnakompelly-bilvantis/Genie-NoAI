@@ -118,7 +118,7 @@ def create_html_report(metadata_file):
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h1>Commit Review Results</h1>
-            <button id="downloadButton" class="download-btn" onclick="generatePDF()">Download as PDF</button>
+            <button id="downloadButton" class="download-btn">Download as PDF</button>
         </div>
         
         <div class="commit-info">
@@ -150,153 +150,153 @@ def create_html_report(metadata_file):
     </div>
 
     <script>
-    document.getElementById("downloadButton").addEventListener("click", function() {
-        try {
+    function generatePDF() {{
+        try {{
             // Get secrets table data
             const secretsTable = document.querySelector('table:nth-of-type(2)');
             const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
-            const secrets = Array.from(secretRows).map(function(row) {
+            const secrets = Array.from(secretRows).map(function(row) {{
                 const cells = row.querySelectorAll("td");
-                return {
+                return {{
                     sno: cells[0] ? cells[0].innerText : "",
                     filename: cells[1] ? cells[1].innerText : "",
                     lineNumber: cells[2] ? cells[2].innerText : "",
                     secret: cells[3] ? cells[3].innerText : ""
-                };
-            });
+                }};
+            }});
 
             // Get disallowed files data
             const disallowedTable = document.querySelector('table:nth-of-type(1)');
             const disallowedRows = disallowedTable.querySelectorAll("tr:not(:first-child)");
-            const disallowedFiles = Array.from(disallowedRows).map(function(row) {
+            const disallowedFiles = Array.from(disallowedRows).map(function(row) {{
                 const cells = row.querySelectorAll("td");
-                return {
+                return {{
                     sno: cells[0] ? cells[0].innerText : "",
                     filename: cells[1] ? cells[1].innerText : ""
-                };
-            });
+                }};
+            }});
 
             // Get commit info
-            const commitInfo = {
+            const commitInfo = {{
                 hash: document.querySelector('.commit-info p:nth-child(1)').textContent.split(': ')[1],
                 author: document.querySelector('.commit-info p:nth-child(2)').textContent.split(': ')[1],
                 date: document.querySelector('.commit-info p:nth-child(3)').textContent.split(': ')[1],
                 message: document.querySelector('.commit-info p:nth-child(4)').textContent.split(': ')[1]
-            };
+            }};
 
             // Create file name using current date and commit hash
             const currentDate = new Date();
-            const formattedDate = currentDate.toLocaleDateString('en-GB', {
+            const formattedDate = currentDate.toLocaleDateString('en-GB', {{
                 day: '2-digit',
                 month: 'short',
                 year: 'numeric'
-            }).replace(' ', '_').replace(',', '');
+            }}).replace(' ', '_').replace(',', '');
             const fileName = 'commit_review_' + formattedDate + '_' + commitInfo.hash.substring(0, 7) + '.pdf';
 
             // Create the PDF document definition
-            const docDefinition = {
+            const docDefinition = {{
                 pageOrientation: 'landscape',
                 content: [
-                    { text: 'Commit Review Results', style: 'header' },
-                    { text: 'Commit Information', style: 'subheader', margin: [0, 10, 0, 5] },
-                    {
+                    {{ text: 'Commit Review Results', style: 'header' }},
+                    {{ text: 'Commit Information', style: 'subheader', margin: [0, 10, 0, 5] }},
+                    {{
                         style: 'commitInfo',
-                        table: {
+                        table: {{
                             widths: ['*'],
                             body: [[
-                                {
+                                {{
                                     stack: [
-                                        { text: 'Commit Hash: ' + commitInfo.hash },
-                                        { text: 'Author: ' + commitInfo.author },
-                                        { text: 'Date: ' + commitInfo.date },
-                                        { text: 'Message: ' + commitInfo.message }
+                                        {{ text: 'Commit Hash: ' + commitInfo.hash }},
+                                        {{ text: 'Author: ' + commitInfo.author }},
+                                        {{ text: 'Date: ' + commitInfo.date }},
+                                        {{ text: 'Message: ' + commitInfo.message }}
                                     ],
                                     margin: [0, 5, 0, 5]
-                                }
+                                }}
                             ]],
-                        },
+                        }},
                         layout: 'lightHorizontalLines'
-                    }
+                    }}
                 ]
-            };
+            }};
 
             // Add disallowed files section if there are any
-            if (disallowedFiles.length > 0) {
+            if (disallowedFiles.length > 0) {{
                 docDefinition.content.push(
-                    { text: 'Disallowed Files', style: 'subheader', margin: [0, 15, 0, 5] },
-                    {
-                        table: {
+                    {{ text: 'Disallowed Files', style: 'subheader', margin: [0, 15, 0, 5] }},
+                    {{
+                        table: {{
                             headerRows: 1,
                             widths: ['10%', '90%'],
                             body: [
                                 [
-                                    { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                    { text: 'Filename', fillColor: '#E9E5E5', bold: true }
+                                    {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                    {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }}
                                 ]
-                            ].concat(disallowedFiles.map(function(file) {
+                            ].concat(disallowedFiles.map(function(file) {{
                                 return [
-                                    { text: file.sno, alignment: 'center' },
-                                    { text: file.filename }
+                                    {{ text: file.sno, alignment: 'center' }},
+                                    {{ text: file.filename }}
                                 ];
-                            }))
-                        },
+                            }}))
+                        }},
                         margin: [0, 0, 0, 20]
-                    }
+                    }}
                 );
-            }
+            }}
 
             // Add secrets section
             docDefinition.content.push(
-                { text: 'Potential Secrets', style: 'subheader', margin: [0, 15, 0, 5] },
-                {
-                    table: {
+                {{ text: 'Potential Secrets', style: 'subheader', margin: [0, 15, 0, 5] }},
+                {{
+                    table: {{
                         headerRows: 1,
                         widths: ['5%', '25%', '10%', '60%'],
                         body: [
                             [
-                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Filename', fillColor: '#E9E5E5', bold: true },
-                                { text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Secret', fillColor: '#E9E5E5', bold: true }
+                                {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }},
+                                {{ text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                {{ text: 'Secret', fillColor: '#E9E5E5', bold: true }}
                             ]
-                        ].concat(secrets.map(function(secret) {
+                        ].concat(secrets.map(function(secret) {{
                             return [
-                                { text: secret.sno, alignment: 'center' },
+                                {{ text: secret.sno, alignment: 'center' }},
                                 secret.filename,
-                                { text: secret.lineNumber, alignment: 'center' },
+                                {{ text: secret.lineNumber, alignment: 'center' }},
                                 secret.secret
                             ];
-                        }))
-                    }
-                }
+                        }}))
+                    }}
+                }}
             );
 
             // Add styles
-            docDefinition.styles = {
-                header: {
+            docDefinition.styles = {{
+                header: {{
                     fontSize: 18,
                     bold: true,
                     alignment: 'center',
                     margin: [0, 0, 0, 20]
-                },
-                subheader: {
+                }},
+                subheader: {{
                     fontSize: 14,
                     bold: true,
                     color: '#07439C'
-                },
-                tableHeader: {
+                }},
+                tableHeader: {{
                     bold: true,
                     fontSize: 12
-                },
-                commitInfo: {
+                }},
+                commitInfo: {{
                     margin: [0, 0, 0, 20]
-                }
-            };
+                }}
+            }};
 
             // Add default style
-            docDefinition.defaultStyle = {
+            docDefinition.defaultStyle = {{
                 fontSize: 10
-            };
+            }};
 
             // Create and download PDF
             const pdfDocGenerator = pdfMake.createPdf(docDefinition);
@@ -304,11 +304,14 @@ def create_html_report(metadata_file):
 
             // Log success
             console.log('PDF generated successfully:', fileName);
-        } catch (error) {
+        }} catch (error) {{
             console.error('Error generating PDF:', error);
             alert('Error generating PDF. Please check the console for details.');
-        }
-    });
+        }}
+    }}
+
+    // Add click event listener to the download button
+    document.getElementById('downloadButton').addEventListener('click', generatePDF);
     </script>
 </body>
 </html>"""
@@ -324,7 +327,7 @@ def main():
     except subprocess.CalledProcessError:
         hooks_path = os.path.dirname(os.path.abspath(__file__))
 
-    # Create reports directory
+    # Create reports directory in the git hooks folder
     reports_dir = os.path.join(hooks_path, '.commit-reports')
     os.makedirs(reports_dir, exist_ok=True)
 
