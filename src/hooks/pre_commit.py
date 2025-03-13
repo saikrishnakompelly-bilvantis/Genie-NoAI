@@ -11,7 +11,6 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.append(str(SCRIPT_DIR))
 
-print(f"SCRIPT_DIR: {SCRIPT_DIR}")
 from commit_scripts.secretscan import SecretScanner
 
 def get_script_dir():
@@ -314,7 +313,7 @@ def save_metadata(has_secrets, secrets_list, has_disallowed_files, disallowed_fi
         
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2)
-        print(f"Metadata saved to {metadata_file}")
+
     except Exception as e:
         print(f"Warning: Failed to save metadata: {str(e)}", file=sys.stderr)
 
