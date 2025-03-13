@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import logging
 from typing import Optional
+import PyInstaller.__main__
+import winreg
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,10 +20,11 @@ class Builder:
         self.project_root = Path(__file__).parent
         self.dist_dir = self.project_root / "dist"
         self.build_dir = self.project_root / "build"
-        self.assets_dir = self.project_root / "src" / "assets"
-        self.hooks_dir = self.project_root / "src" / "hooks"
+        self.src_dir = self.project_root / "src"
+        self.hooks_dir = self.src_dir / "hooks"
+        self.assets_dir = self.src_dir / "assets"
         self.logo_path = self.assets_dir / "logo.png"
-        self.main_script = self.project_root / "src" / "main.py"
+        self.main_script = self.src_dir / "main.py"
         
         # Application details
         self.app_name = "Genie-Secrets"
@@ -43,103 +46,199 @@ class Builder:
                 logger.error("Failed to install dependencies")
                 return False
 
-    def generate_spec_file(self) -> Path:
-        """Generate optimized PyInstaller spec file."""
+    def clean_build_dirs(self):
+        """Clean up previous build artifacts."""
+        logger.info("Cleaning build directories...")
+        for dir_path in [self.dist_dir, self.build_dir]:
+            if dir_path.exists():
+                shutil.rmtree(dir_path)
+
+    def collect_data_files(self):
+        """Collect all necessary data files."""
+        data_files = []
+        
+        # Add hooks directory with proper relative paths
+        for root, _, files in os.walk(self.hooks_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                # Calculate the relative path to maintain directory structure
+                rel_dir = os.path.relpath(root, self.project_root)
+                target_dir = os.path.join('hooks', os.path.relpath(root, self.hooks_dir))
+                data_files.append((full_path, target_dir))
+
+        # Add assets directory with proper relative paths
+        for root, _, files in os.walk(self.assets_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                # Calculate the relative path to maintain directory structure
+                rel_dir = os.path.relpath(root, self.project_root)
+                target_dir = os.path.join('assets', os.path.relpath(root, self.assets_dir))
+                data_files.append((full_path, target_dir))
+
+        return data_files
+
+    def generate_spec_file(self):
+        """Generate PyInstaller spec file content."""
+        data_files = self.collect_data_files()
+        
         spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import os
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
 
-# Collect all hooks files
-hooks_data = []
-hooks_dir = '{self.project_root}/src/hooks'
-for root, dirs, files in os.walk(hooks_dir):
-    for file in files:
-        source = os.path.join(root, file)
-        target = os.path.join('hooks', os.path.relpath(source, hooks_dir))
-        hooks_data.append((source, os.path.dirname(target)))
+# Collect all data files
+data_files = {data_files}
 
-# Collect all PyQt6 modules
-qt_modules = collect_submodules('PyQt6')
-qt_data = collect_data_files('PyQt6')
+# Collect Qt resources
+qt_data_files = []
+try:
+    from PyQt6.QtCore import QLibraryInfo
+    qt_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.DataPath)
+    resources_path = os.path.join(qt_path, "resources")
+    translations_path = os.path.join(qt_path, "translations")
+    
+    # Add resources
+    if os.path.exists(resources_path):
+        for file in os.listdir(resources_path):
+            if file.startswith('qtwebengine'):
+                source = os.path.join(resources_path, file)
+                qt_data_files.append((source, "resources"))
+    
+    # Add translations
+    if os.path.exists(translations_path):
+        for file in os.listdir(translations_path):
+            if file.startswith('qtwebengine'):
+                source = os.path.join(translations_path, file)
+                qt_data_files.append((source, "translations"))
+                
+    # Add platform plugins for Windows
+    if sys.platform == 'win32':
+        qt_plugins_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
+        platform_path = os.path.join(qt_plugins_path, "platforms")
+        styles_path = os.path.join(qt_plugins_path, "styles")
+        
+        # Add platform plugins
+        if os.path.exists(platform_path):
+            for file in os.listdir(platform_path):
+                if file.endswith('.dll'):
+                    source = os.path.join(platform_path, file)
+                    qt_data_files.append((source, os.path.join("PyQt6", "Qt6", "plugins", "platforms")))
+                    
+        # Add style plugins
+        if os.path.exists(styles_path):
+            for file in os.listdir(styles_path):
+                if file.endswith('.dll'):
+                    source = os.path.join(styles_path, file)
+                    qt_data_files.append((source, os.path.join("PyQt6", "Qt6", "plugins", "styles")))
+except Exception as e:
+    print(f"Warning: Could not collect Qt resources: {{e}}")
 
 a = Analysis(
-    ['{self.main_script}'],
+    [os.path.join('{self.src_dir}', 'main.py')],
     pathex=['{self.project_root}'],
     binaries=[],
-    datas=[
-        ('{self.assets_dir}', 'assets'),
-        *hooks_data,  # Include all hooks files with their directory structure
-        *qt_data,  # Include all PyQt6 data files
-    ],
+    datas=data_files + qt_data_files,
     hiddenimports=[
-        *qt_modules,  # Include all PyQt6 modules
         'PyQt6.QtWebEngineCore',
         'PyQt6.QtWebEngineWidgets',
         'PyQt6.QtWebChannel',
+        'PyQt6.QtNetwork',
+        'PyQt6.sip',
+        'PyQt6.QtPrintSupport',
+        'PyQt6.QtWidgets',
+        'PyQt6.QtGui',
+        'PyQt6.QtCore'
     ],
     hookspath=[],
-    hooksconfig={{}},
+    hooksconfig={{
+        'PyQt6': {{
+            'gui': True
+        }}
+    }},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'cv2', 'PIL'],  # Exclude unnecessary packages
+    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
 
-# Remove unnecessary files from the bundle
-a.binaries = [x for x in a.binaries if not x[0].startswith('opengl32sw.dll')]
-a.binaries = [x for x in a.binaries if not x[0].startswith('Qt6WebEngineCore.framework')]
+# Add WebEngine resources for PyQt6
+try:
+    from PyQt6.QtWebEngineCore import QWebEngineUrlScheme
+    import shutil
+    import PyQt6
+    
+    qt_path = os.path.dirname(PyQt6.__file__)
+    web_engine_path = os.path.join(qt_path, "Qt6", "resources")
+    
+    if os.path.exists(web_engine_path):
+        web_engine_files = []
+        for filename in os.listdir(web_engine_path):
+            if filename.startswith("qtwebengine"):
+                source = os.path.join(web_engine_path, filename)
+                web_engine_files.append((source, "."))
+        a.datas.extend(web_engine_files)
+        
+    # Add Windows-specific WebEngine files
+    if sys.platform == 'win32':
+        qt_bin_path = os.path.join(qt_path, "Qt6", "bin")
+        if os.path.exists(qt_bin_path):
+            for filename in os.listdir(qt_bin_path):
+                if filename.startswith(("QtWebEngineCore", "QtWebEngineProcess")):
+                    source = os.path.join(qt_bin_path, filename)
+                    a.binaries.append((filename, source, 'BINARY'))
+except ImportError:
+    pass
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-if '{self.os_type}' == 'darwin':
+if sys.platform == 'darwin':
     exe = EXE(
         pyz,
         a.scripts,
         [],
         exclude_binaries=True,
-        name='{self.app_name}',
+        name='Genie-Secrets',
         debug=False,
         bootloader_ignore_signals=False,
-        strip=True,  # Strip symbols for smaller size
-        upx=True,  # Enable UPX compression
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=False,
-        disable_windowed_traceback=False,
-        argv_emulation=False,
-        target_arch=None,
+        strip=False,
+        upx=True,
+        console=False,  # Set to False for production
         codesign_identity=None,
         entitlements_file=None,
-        icon='{self.logo_path}'
+        icon=os.path.join('{self.assets_dir}', 'logo.png'),
     )
     
-    # Optimize bundle creation
+    # Create .app bundle for macOS
     app = BUNDLE(
         exe,
         a.binaries,
         a.zipfiles,
         a.datas,
-        name='{self.app_name}.app',
-        icon='{self.logo_path}',
-        bundle_identifier=f'com.{self.app_name.lower()}',
+        name='Genie-Secrets.app',
+        icon=os.path.join('{self.assets_dir}', 'logo.png'),
+        bundle_identifier='com.genie.secrets',
         info_plist={{
+            'CFBundleShortVersionString': '1.0.0',
+            'CFBundleVersion': '1.0.0',
             'NSHighResolutionCapable': True,
+            'LSBackgroundOnly': False,
             'NSRequiresAquaSystemAppearance': False,
-            'CFBundleShortVersionString': '{self.version}',
-            'CFBundleVersion': '{self.version}',
-            'CFBundleName': '{self.app_name}',
-            'CFBundleDisplayName': '{self.app_name}',
-            'CFBundleGetInfoString': '{self.description}',
-            'CFBundleIdentifier': f'com.{self.app_name.lower()}',
-            'NSAppTransportSecurity': {{'NSAllowsArbitraryLoads': True}},
-        }}
+            'NSPrincipalClass': 'NSApplication',
+            'NSAppleScriptEnabled': False,
+            'CFBundleDisplayName': 'Genie-Secrets',
+            'CFBundleName': 'Genie-Secrets',
+            'NSAppTransportSecurity': {{
+                'NSAllowsArbitraryLoads': True
+            }},
+        }},
     )
 else:
+    # For Windows and Linux
     exe = EXE(
         pyz,
         a.scripts,
@@ -147,63 +246,65 @@ else:
         a.zipfiles,
         a.datas,
         [],
-        name='{self.app_name}',
+        name='Genie-Secrets',
         debug=False,
         bootloader_ignore_signals=False,
-        strip=True,  # Strip symbols for smaller size
-        upx=True,  # Enable UPX compression
+        strip=False,
+        upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,
+        console=False,  # Set to False for production
         disable_windowed_traceback=False,
-        argv_emulation=False,
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon='{self.logo_path}'
+        icon=os.path.join('{self.assets_dir}', 'logo.png'),
+        version='{self.version}',
+        uac_admin=True if sys.platform == 'win32' else None,  # Request admin rights on Windows
     )
+
+    # Add Windows-specific file associations and metadata
+    if sys.platform == 'win32':
+        import win32api
+        import win32con
+        try:
+            # Create file associations
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\\Classes\\.genie") as key:
+                winreg.SetValue(key, "", winreg.REG_SZ, "Genie.SecretScanner")
+                
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\\Classes\\Genie.SecretScanner") as key:
+                winreg.SetValue(key, "", winreg.REG_SZ, "Genie Secret Scanner")
+                with winreg.CreateKey(key, "DefaultIcon") as icon_key:
+                    winreg.SetValue(icon_key, "", winreg.REG_SZ, f"{{sys.executable}},0")
+                with winreg.CreateKey(key, "shell\\open\\command") as cmd_key:
+                    winreg.SetValue(cmd_key, "", winreg.REG_SZ, f'"{sys.executable}" "%1"')
+        except Exception as e:
+            print(f"Warning: Could not create Windows file associations: {{e}}")
 """
-        spec_file = self.project_root / f"{self.app_name}.spec"
-        spec_file.write_text(spec_content)
+        spec_file = os.path.join(self.project_root, f"{self.app_name}.spec")
+        with open(spec_file, 'w') as f:
+            f.write(spec_content)
         return spec_file
 
     def build(self) -> Optional[Path]:
-        """Build the executable with optimized settings."""
+        """Build the executable."""
         try:
             if not self.check_dependencies():
                 return None
 
             # Clean previous builds
-            shutil.rmtree(self.dist_dir, ignore_errors=True)
-            shutil.rmtree(self.build_dir, ignore_errors=True)
+            self.clean_build_dirs()
 
-            # Generate optimized spec file
+            # Generate spec file
             spec_file = self.generate_spec_file()
-            
-            # Build using PyInstaller with optimized settings
-            logger.info("Building executable with optimized settings...")
-            
-            # Install UPX if available (for better compression)
-            try:
-                if self.os_type == "darwin":
-                    subprocess.run(["brew", "install", "upx"], check=False)
-                elif self.os_type == "linux":
-                    subprocess.run(["sudo", "apt-get", "install", "upx"], check=False)
-            except Exception:
-                logger.warning("UPX not installed. Continuing without UPX compression.")
-            
-            build_cmd = [
-                sys.executable,
-                "-OO",  # Optimize bytecode
-                "-m",
-                "PyInstaller",
-                "--clean",
-                "--noconfirm",
-                "--log-level=WARN",
+
+            # Build using PyInstaller
+            logger.info("Building executable...")
+            PyInstaller.__main__.run([
+                '--clean',
+                '--noconfirm',
                 str(spec_file)
-            ]
-            
-            subprocess.run(build_cmd, check=True)
+            ])
 
             # Get the path to the built executable
             if self.os_type == "darwin":
@@ -217,25 +318,11 @@ else:
                 logger.error(f"Build failed: Executable not found at {executable_path}")
                 return None
 
-            # Make hooks executable in the built package
-            if self.os_type != "windows":
-                hooks_dir = executable_path
-                if self.os_type == "darwin":
-                    hooks_dir = hooks_dir / "Contents" / "MacOS"
-                hooks_dir = hooks_dir / "hooks"
-                if hooks_dir.exists():
-                    for hook in ['scan-repo', 'pre-commit', 'post-commit']:
-                        hook_path = hooks_dir / hook
-                        if hook_path.exists():
-                            os.chmod(hook_path, 0o755)
-
             logger.info(f"Build successful! Executable created at: {executable_path}")
             return executable_path
 
         except Exception as e:
             logger.error(f"Build failed: {str(e)}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
 def main():
@@ -243,10 +330,8 @@ def main():
     executable_path = builder.build()
     
     if executable_path:
-        logger.info("Build completed successfully!")
         sys.exit(0)
     else:
-        logger.error("Build failed!")
         sys.exit(1)
 
 if __name__ == "__main__":
