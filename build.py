@@ -8,7 +8,6 @@ import subprocess
 import logging
 from typing import Optional
 import PyInstaller.__main__
-import winreg
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -113,26 +112,6 @@ try:
             if file.startswith('qtwebengine'):
                 source = os.path.join(translations_path, file)
                 qt_data_files.append((source, "translations"))
-                
-    # Add platform plugins for Windows
-    if sys.platform == 'win32':
-        qt_plugins_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
-        platform_path = os.path.join(qt_plugins_path, "platforms")
-        styles_path = os.path.join(qt_plugins_path, "styles")
-        
-        # Add platform plugins
-        if os.path.exists(platform_path):
-            for file in os.listdir(platform_path):
-                if file.endswith('.dll'):
-                    source = os.path.join(platform_path, file)
-                    qt_data_files.append((source, os.path.join("PyQt6", "Qt6", "plugins", "platforms")))
-                    
-        # Add style plugins
-        if os.path.exists(styles_path):
-            for file in os.listdir(styles_path):
-                if file.endswith('.dll'):
-                    source = os.path.join(styles_path, file)
-                    qt_data_files.append((source, os.path.join("PyQt6", "Qt6", "plugins", "styles")))
 except Exception as e:
     print(f"Warning: Could not collect Qt resources: {{e}}")
 
@@ -147,17 +126,10 @@ a = Analysis(
         'PyQt6.QtWebChannel',
         'PyQt6.QtNetwork',
         'PyQt6.sip',
-        'PyQt6.QtPrintSupport',
-        'PyQt6.QtWidgets',
-        'PyQt6.QtGui',
-        'PyQt6.QtCore'
+        'PyQt6.QtPrintSupport'
     ],
     hookspath=[],
-    hooksconfig={{
-        'PyQt6': {{
-            'gui': True
-        }}
-    }},
+    hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -182,15 +154,6 @@ try:
                 source = os.path.join(web_engine_path, filename)
                 web_engine_files.append((source, "."))
         a.datas.extend(web_engine_files)
-        
-    # Add Windows-specific WebEngine files
-    if sys.platform == 'win32':
-        qt_bin_path = os.path.join(qt_path, "Qt6", "bin")
-        if os.path.exists(qt_bin_path):
-            for filename in os.listdir(qt_bin_path):
-                if filename.startswith(("QtWebEngineCore", "QtWebEngineProcess")):
-                    source = os.path.join(qt_bin_path, filename)
-                    a.binaries.append((filename, source, 'BINARY'))
 except ImportError:
     pass
 
@@ -207,7 +170,7 @@ if sys.platform == 'darwin':
         bootloader_ignore_signals=False,
         strip=False,
         upx=True,
-        console=False,  # Set to False for production
+        console=True,  # Set to True temporarily for debugging
         codesign_identity=None,
         entitlements_file=None,
         icon=os.path.join('{self.assets_dir}', 'logo.png'),
@@ -253,33 +216,13 @@ else:
         upx=True,
         upx_exclude=[],
         runtime_tmpdir=None,
-        console=False,  # Set to False for production
+        console=True,  # Set to True temporarily for debugging
         disable_windowed_traceback=False,
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
         icon=os.path.join('{self.assets_dir}', 'logo.png'),
-        version='{self.version}',
-        uac_admin=True if sys.platform == 'win32' else None,  # Request admin rights on Windows
     )
-
-    # Add Windows-specific file associations and metadata
-    if sys.platform == 'win32':
-        import win32api
-        import win32con
-        try:
-            # Create file associations
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\\Classes\\.genie") as key:
-                winreg.SetValue(key, "", winreg.REG_SZ, "Genie.SecretScanner")
-                
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\\Classes\\Genie.SecretScanner") as key:
-                winreg.SetValue(key, "", winreg.REG_SZ, "Genie Secret Scanner")
-                with winreg.CreateKey(key, "DefaultIcon") as icon_key:
-                    winreg.SetValue(icon_key, "", winreg.REG_SZ, f"{{sys.executable}},0")
-                with winreg.CreateKey(key, "shell\\open\\command") as cmd_key:
-                    winreg.SetValue(cmd_key, "", winreg.REG_SZ, f'"{sys.executable}" "%1"')
-        except Exception as e:
-            print(f"Warning: Could not create Windows file associations: {{e}}")
 """
         spec_file = os.path.join(self.project_root, f"{self.app_name}.spec")
         with open(spec_file, 'w') as f:

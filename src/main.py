@@ -1157,42 +1157,76 @@ Categories=Utility;Development;
         self.web_view.setHtml(html_content)
 
 if __name__ == '__main__':
-    # Set up logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(os.path.expanduser('~/.genie/genie.log'))
-        ]
-    )
-    
-    app = QApplication(sys.argv)
-    
-    # Get the logo path
-    if getattr(sys, 'frozen', False):
-        app_path = sys._MEIPASS
-    else:
-        app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(app_path, 'assets', 'logo.png')
-    
-    # Show splash screen with SVG logo if it exists
-    if os.path.exists(logo_path):
-        splash_pix = QPixmap(logo_path)
-        if not splash_pix.isNull():
-            splash = QSplashScreen(splash_pix)
-            splash.show()
+    try:
+        # Initialize QApplication first
+        app = QApplication(sys.argv)
+        
+        # Setup basic console logging
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[logging.StreamHandler()]
+        )
+        
+        logging.info("Starting Genie application...")
+        logging.info(f"Python version: {sys.version}")
+        logging.info(f"Platform: {platform.platform()}")
+        logging.info(f"Working directory: {os.getcwd()}")
+        
+        if getattr(sys, 'frozen', False):
+            logging.info(f"Running as frozen application")
+            logging.info(f"Executable path: {sys.executable}")
+            logging.info(f"MEIPASS: {sys._MEIPASS}")
+            app_path = sys._MEIPASS
         else:
+            logging.info("Running in development mode")
+            app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Get the logo path
+        logo_path = os.path.join(app_path, 'assets', 'logo.png')
+        logging.info(f"Logo path: {logo_path}")
+        
+        # Show splash screen with logo if it exists
+        if os.path.exists(logo_path):
+            logging.info("Loading splash screen...")
+            splash_pix = QPixmap(logo_path)
+            if not splash_pix.isNull():
+                splash = QSplashScreen(splash_pix)
+                splash.show()
+                logging.info("Splash screen shown")
+            else:
+                logging.warning("Failed to load logo for splash screen")
+                splash = None
+        else:
+            logging.warning(f"Logo file not found at {logo_path}")
             splash = None
-    else:
-        splash = None
-    
-    # Initialize main window
-    main = GenieApp()
-    main.show()
-    
-    # Finish splash screen if it was shown
-    if splash:
-        splash.finish(main)
-    
-    sys.exit(app.exec())
+        
+        # Initialize main window
+        logging.info("Initializing main window...")
+        main = GenieApp()
+        main.show()
+        logging.info("Main window shown")
+        
+        # Finish splash screen if it was shown
+        if splash:
+            splash.finish(main)
+            logging.info("Splash screen finished")
+        
+        # Start event loop
+        logging.info("Starting event loop...")
+        exit_code = app.exec()
+        logging.info(f"Application exiting with code: {exit_code}")
+        sys.exit(exit_code)
+        
+    except Exception as e:
+        logging.critical(f"Fatal error: {str(e)}", exc_info=True)
+        
+        # Show error in GUI if possible
+        try:
+            if 'app' in locals():
+                QMessageBox.critical(None, "Fatal Error",
+                    f"A fatal error occurred:\n\n{str(e)}")
+        except:
+            pass
+        
+        sys.exit(1)
