@@ -2,35 +2,46 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Genie - Secret Scan Results</title>
+    <title>{title}</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/pdfmake.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.4/vfs_fonts.js"></script>
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .header-info { 
-            background: #f8f9fa; 
+        body {{ 
+            font-family: -apple-system, system-ui, sans-serif; 
+            margin: 20px; 
+            background: {background_color}; 
+        }}
+        .container {{ 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            background: {container_background}; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        }}
+        .header-info {{ 
+            background: {header_background}; 
             padding: 15px; 
             border-radius: 5px; 
             margin-bottom: 20px;
-            border-left: 4px solid #07439C;
-        }
-        .header-info p { 
+            border-left: 4px solid {primary_color};
+        }}
+        .header-info p {{ 
             margin: 5px 0; 
             color: #666;
             font-size: 14px;
-        }
-        .header-info strong { 
+        }}
+        .header-info strong {{ 
             color: #333;
             margin-right: 5px;
-        }
-        table { 
+        }}
+        table {{ 
             width: 100%; 
             border-collapse: collapse; 
             margin-top: 20px;
             table-layout: fixed;
-        }
-        th, td { 
+        }}
+        th, td {{ 
             padding: 12px; 
             text-align: left; 
             border: 1px solid #ddd;
@@ -39,11 +50,11 @@
             word-wrap: break-word;
             word-break: break-all;
             hyphens: auto;
-        }
-        th { background: #07439C; color: white; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .secret-content { 
-            color: #d32f2f; 
+        }}
+        th {{ background: {primary_color}; color: white; }}
+        tr:nth-child(even) {{ background: #f9f9f9; }}
+        .secret-content {{ 
+            color: {error_color}; 
             font-family: monospace;
             white-space: pre-wrap;
             max-width: 100%;
@@ -53,50 +64,48 @@
             margin: 0;
             border-radius: 4px;
             background: rgba(211, 47, 47, 0.05);
-        }
-        .line-number { 
-            color: #e74c3c; 
+        }}
+        .line-number {{ 
+            color: {error_color}; 
             font-weight: bold; 
             text-align: center;
-        }
-        .disallowed-file {
-            color: #e74c3c;
+        }}
+        .disallowed-file {{
+            color: {error_color};
             font-family: monospace;
-        }
-        .sno {
+        }}
+        .sno {{
             text-align: center;
-        }
-        h1, h2 { color: #07439C; margin-bottom: 20px; }
-        .download-btn {
+        }}
+        h1, h2 {{ color: {primary_color}; margin-bottom: 20px; }}
+        .download-btn {{
             padding: 10px 20px;
-            background-color: #07439C;
+            background-color: {primary_color};
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             margin-bottom: 20px;
-        }
-        .download-btn:hover {
+        }}
+        .download-btn:hover {{
             background-color: #053278;
-        }
+        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h1>Genie - Secret Scan Results</h1>
+            <h1>{title}</h1>
             <button id="downloadButton" class="download-btn">Download as PDF</button>
         </div>
         <div class="header-info">
-                <div>
-                <p><strong>Git Author:</strong> saikrishnakompelly-bilvantis</p>
-                <p><strong>Repository:</strong> Genie-Secrets</p>
-                <p><strong>Branch:</strong> main</p>
-                <p><strong>Commit Hash:</strong> 466c9640df06e270a74c765ae60b9df385bd84d9</p>
-                <p><strong>Timestamp:</strong> 2025-03-13 08:59:41 AM</p>
-                </div>
+            <p><strong>Git Author:</strong> {git_metadata[author]}</p>
+            <p><strong>Repository:</strong> {git_metadata[repo_name]}</p>
+            <p><strong>Branch:</strong> {git_metadata[branch]}</p>
+            <p><strong>Commit Hash:</strong> {git_metadata[commit_hash]}</p>
+            <p><strong>Timestamp:</strong> {git_metadata[timestamp]}</p>
         </div>
-        
+        {disallowed_files_section}
         <h2>Potential Secrets Found:</h2>
         <table id="secretsTable">
             <tr>
@@ -105,115 +114,119 @@
                 <th style="width:10%">Line #</th>
                 <th style="width:60%">Secret</th>
             </tr>
-            
+            {secrets_table_rows}
         </table>
     </div>
     <script>
-    document.getElementById("downloadButton").addEventListener("click", () => {
+    document.getElementById("downloadButton").addEventListener("click", () => {{
         // Get secrets table data
         const secretsTable = document.getElementById("secretsTable");
         const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
-        const secrets = Array.from(secretRows).map((row, index) => {
+        const secrets = Array.from(secretRows).map((row, index) => {{
             const cells = row.querySelectorAll("td");
-            return {
+            return {{
                 sno: cells[0]?.innerText || "",
                 filename: cells[1]?.innerText || "",
                 lineNumber: cells[2]?.innerText || "",
                 secret: cells[3]?.innerText || ""
-            };
-        });
+            }};
+        }});
 
         // Get disallowed files data if it exists
         const disallowedFilesSection = document.getElementById("disallowedFilesFound");
         const disallowedRows = disallowedFilesSection ? 
             Array.from(disallowedFilesSection.querySelectorAll("tr:not(:first-child)")) : [];
-        const disallowedFiles = disallowedRows.map(row => {
+        const disallowedFiles = disallowedRows.map(row => {{
             const cells = row.querySelectorAll("td");
-            return {
+            return {{
                 sno: cells[0]?.innerText || "",
                 filename: cells[1]?.innerText || ""
-            };
-        });
+            }};
+        }});
 
         // Create file name using current date
         const currentDate = new Date();
-        const formattedDate = currentDate.toLocaleDateString('en-GB', {
+        const formattedDate = currentDate.toLocaleDateString('en-GB', {{
             day: '2-digit', month: 'short', year: 'numeric'
-        }).replace(' ', '_').replace(',', '');
+        }}).replace(' ', '_').replace(',', '');
         const fileName = 'repo_scan_' + formattedDate + '.pdf';
 
         // Create the PDF document definition
-        const docDefinition = {
+        const docDefinition = {{
             pageOrientation: 'landscape',
             content: [
-                { text: 'Genie - Secret Scan Results', style: 'header' },
-                { text: `Git Author: $saikrishnakompelly-bilvantis`, style: 'info' },
-                { text: `Repository: $Genie-Secrets`, style: 'info' },
-                { text: `Branch: $main`, style: 'info' },
-                { text: `Commit Hash: $466c9640df06e270a74c765ae60b9df385bd84d9`, style: 'info' },
-                { text: `Timestamp: $2025-03-13 08:59:41 AM`, style: 'info' },
+                {{ text: '{title}', style: 'header' }},
+                {{ text: `Git Author: {git_metadata[author]}`, style: 'info' }},
+                {{ text: `Repository: {git_metadata[repo_name]}`, style: 'info' }},
+                {{ text: `Branch: {git_metadata[branch]}`, style: 'info' }},
+                {{ text: `Commit Hash: {git_metadata[commit_hash]}`, style: 'info' }},
+                {{ text: `Timestamp: {git_metadata[timestamp]}`, style: 'info' }},
                 // Disallowed Files Section
                 ...(disallowedFiles.length ? [
-                    { text: 'Disallowed Files Found:', style: 'subheader' },
-                    {
-                        table: {
+                    {{ text: 'Disallowed Files Found:', style: 'subheader' }},
+                    {{
+                        table: {{
                             headerRows: 1,
                             widths: ['5%', '95%'],
                             body: [
                                 [
-                                    { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                    { text: 'Filename', fillColor: '#E9E5E5', bold: true }
+                                    {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                    {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }}
                                 ],
                                 ...disallowedFiles.map(file => [
-                                    { text: file.sno, alignment: 'center' },
-                                    { text: file.filename }
+                                    {{ text: file.sno, alignment: 'center' }},
+                                    {{ text: file.filename }}
                                 ])
                             ]
-                        },
+                        }},
                         margin: [0, 0, 0, 20]
-                    }
+                    }}
                 ] : []),
                 // Secrets Section
-                { text: 'Potential Secrets Found:', style: 'subheader' },
-                {
-                    table: {
+                {{ text: 'Potential Secrets Found:', style: 'subheader' }},
+                {{
+                    table: {{
                         headerRows: 1,
                         widths: ['5%', '25%', '10%', '60%'],
                         body: [
                             [
-                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Filename', fillColor: '#E9E5E5', bold: true },
-                                { text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
-                                { text: 'Secret', fillColor: '#E9E5E5', bold: true }
+                                {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }},
+                                {{ text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
+                                {{ text: 'Secret', fillColor: '#E9E5E5', bold: true }}
                             ],
                             ...secrets.map((secret, index) => [
-                                { text: secret.sno, alignment: 'center' },
+                                {{ text: secret.sno, alignment: 'center' }},
                                 secret.filename,
-                                { text: secret.lineNumber, alignment: 'center' },
+                                {{ text: secret.lineNumber, alignment: 'center' }},
                                 secret.secret
                             ])
                         ]
-                    }
-                }
+                    }}
+                }}
             ],
-            styles: {
-                header: {
+            styles: {{
+                header: {{
                     fontSize: 18,
                     bold: true,
                     alignment: 'center',
                     margin: [0, 0, 0, 10]
-                },
-                subheader: {
+                }},
+                subheader: {{
                     fontSize: 14,
                     bold: true,
                     margin: [0, 10, 0, 5]
-                }
-            }
-        };
+                }},
+                info: {{
+                    fontSize: 12,
+                    margin: [0, 2, 0, 2]
+                }}
+            }}
+        }};
 
         // Generate and download the PDF
         pdfMake.createPdf(docDefinition).download(fileName);
-    });
+    }});
     </script>
 </body>
-</html>
+</html> 

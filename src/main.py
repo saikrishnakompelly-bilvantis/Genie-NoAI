@@ -634,109 +634,145 @@ class GenieApp(QMainWindow):
         self._message_callback = callback
 
     def install_hooks(self):
+        """Install Git hooks and necessary files."""
         try:
-            # Create .genie directory structure
-            genie_dir = os.path.expanduser('~/.genie')
+            # Get user's home directory
+            home_dir = os.path.expanduser('~')
+            genie_dir = os.path.join(home_dir, '.genie')
             hooks_dir = os.path.join(genie_dir, 'hooks')
-            print(f"genie_dir: {genie_dir}")
-            print(f"hooks_dir: {hooks_dir}")
+            
             # Clean up any existing installation first
             if os.path.exists(genie_dir):
                 import shutil
                 shutil.rmtree(genie_dir)
             
-            # Create fresh directories
-            os.makedirs(hooks_dir, exist_ok=True)
+            # Create genie directory
+            os.makedirs(genie_dir, exist_ok=True)
             
-            if not os.path.exists(self.hooks_source):
-                raise Exception(f"Hooks source directory not found at: {self.hooks_source}")
+            # Copy entire hooks directory structure
+            import shutil
+            shutil.copytree(self.hooks_source, hooks_dir)
             
-            # First, copy the hook scripts
-            for hook in ['pre-commit', 'scan-repo','post-commit']:
-                src = os.path.join(self.hooks_source, hook)
-                dst = os.path.join(hooks_dir, hook)
-                if not os.path.exists(src):
-                    raise Exception(f"Hook script not found: {hook}")
-                with open(src, 'rb') as fsrc, open(dst, 'wb') as fdst:
-                    fdst.write(fsrc.read())
-                os.chmod(dst, 0o755)
-
-            # Copy commit-scripts directory and its contents
-            commit_scripts_src = os.path.join(self.hooks_source, 'commit-scripts')
-            commit_scripts_dst = os.path.join(hooks_dir, 'commit-scripts')
+            # Make hook files executable
+            hook_files = ['scan-repo', 'pre-commit', 'post-commit']
+            for hook in hook_files:
+                hook_path = os.path.join(hooks_dir, hook)
+                if os.path.exists(hook_path):
+                    os.chmod(hook_path, 0o755)
             
-            if not os.path.exists(commit_scripts_src):
-                raise Exception(f"commit-scripts directory not found at: {commit_scripts_src}")
-            
-            # Create commit-scripts directory
-            os.makedirs(commit_scripts_dst, exist_ok=True)
-            
-            # Copy all files from commit-scripts
-            for file in os.listdir(commit_scripts_src):
-                src_file = os.path.join(commit_scripts_src, file)
-                dst_file = os.path.join(commit_scripts_dst, file)
+            # Set up Git configuration
+            try:
+                # Remove any existing Git hooks configuration
+                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                             check=False)  # Don't check as it might not exist
+                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                             check=False)  # Don't check as it might not exist
                 
-                if os.path.isfile(src_file):
-                    with open(src_file, 'rb') as fsrc, open(dst_file, 'wb') as fdst:
-                        fdst.write(fsrc.read())
-                    # Make Python scripts executable
-                    if file.endswith('.py'):
-                        os.chmod(dst_file, 0o755)
-
-            # Remove any existing Git hooks configuration
-            subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                         check=False)  # Don't check as it might not exist
-            subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                         check=False)  # Don't check as it might not exist
-            
-            # Set up new Git hooks configuration
-            subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
-                         check=True)
-            
-            # Create git alias for scan-repo with absolute path
-            scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
-            # Use bash to execute the script directly from .genie/hooks
-            alias_cmd = f'!bash "{scan_repo_path}"'
-            print(f"alias_cmd: {alias_cmd}")
-            subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], check=True)
-            
-            # Verify installation
-            if not os.path.exists(hooks_dir) or not os.path.exists(commit_scripts_dst):
-                raise Exception("Failed to create required directories")
+                # Set up new Git hooks configuration
+                subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], check=True)
                 
-            if not os.access(os.path.join(hooks_dir, 'scan-repo'), os.X_OK):
-                raise Exception("scan-repo script is not executable")
+                # Create git alias for scan-repo with absolute path
+                scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
+                alias_cmd = f'!bash "{scan_repo_path}"'
+                subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], check=True)
                 
-            hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                      capture_output=True, text=True).stdout.strip()
-            if hooks_path != hooks_dir:
-                raise Exception("Git hooks path not set correctly")
+                # Create a config file to store the hooks directory path and installation status
+                config_file = os.path.join(genie_dir, 'config')
+                with open(config_file, 'w') as f:
+                    f.write(f'hooks_dir={hooks_dir}\n')
+                    f.write('installed=true\n')
                 
-            scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                           capture_output=True, text=True).stdout.strip()
-            if not scan_repo_alias:
-                raise Exception("Git scan-repo alias not set correctly")
-            
-            # Create a config file to store the hooks directory path
-            config_file = os.path.join(genie_dir, 'config')
-            with open(config_file, 'w') as f:
-                f.write(f'hooks_dir={hooks_dir}\n')
-                f.write('installed=true\n')
-            
-            self.show_message(
-                'Installation Complete',
-                'Genie hooks have been successfully installed!\n\n'
-                'You can now use the "git scan-repo" command in any repository.',
-                'success',
-                self.load_main_ui
-            )
-            
+                # Show success message with custom HTML
+                success_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body {{
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+                            margin: 0;
+                            padding: 2rem;
+                            background: #f5f5f5;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            min-height: calc(100vh - 4rem);
+                        }}
+                        .success-container {{
+                            background: white;
+                            border-radius: 16px;
+                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            padding: 2rem;
+                            max-width: 600px;
+                            width: 90%;
+                            text-align: center;
+                        }}
+                        .success-icon {{
+                            color: #28a745;
+                            font-size: 4rem;
+                            margin-bottom: 1rem;
+                        }}
+                        h1 {{
+                            color: #07439C;
+                            font-size: 2rem;
+                            margin: 1rem 0;
+                        }}
+                        p {{
+                            color: #666;
+                            font-size: 1.1rem;
+                            line-height: 1.6;
+                            margin: 1rem 0;
+                        }}
+                        .button-container {{
+                            display: flex;
+                            gap: 1rem;
+                            justify-content: center;
+                            margin-top: 2rem;
+                        }}
+                        .scan-btn {{
+                            background-color: #07439C;
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 1rem 2rem;
+                            font-size: 1.2rem;
+                            font-weight: 500;
+                            cursor: pointer;
+                            transition: all 0.3s ease;
+                        }}
+                        .scan-btn:hover {{
+                            background-color: #053278;
+                            transform: translateY(-2px);
+                            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="success-container">
+                        <div class="success-icon">✓</div>
+                        <h1>Installation Successful!</h1>
+                        <p>Genie has been successfully installed and configured. Your Git hooks are now set up and ready to use.</p>
+                        <p>Installation path: {hooks_dir}</p>
+                        <div class="button-container">
+                            <button class="scan-btn" onclick="console.log('action:scan')">Start Scanning</button>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                self.web_view.setHtml(success_html)
+                
+                # Update the UI based on installation status
+                self.is_first_run = False
+                self.load_main_ui()
+                
+            except subprocess.CalledProcessError as e:
+                self.show_message('Error', f'Failed to configure Git hooks: {str(e)}', 'error')
+                return
+                
         except Exception as e:
-            self.show_message(
-                'Installation Failed',
-                f'Unable to install hooks:\n{str(e)}',
-                'error'
-            )
+            self.show_message('Error', f'Failed to install hooks: {str(e)}', 'error')
+            return
 
     def uninstall_hooks(self):
         try:
