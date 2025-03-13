@@ -12,6 +12,8 @@ from PyQt6.QtWebEngineCore import QWebEnginePage
 from datetime import datetime
 from urllib.parse import quote, urljoin
 from urllib.request import pathname2url
+import platform
+import logging
 
 class ReportWindow(QMainWindow):
     def __init__(self, file_path):
@@ -87,6 +89,11 @@ class GenieApp(QMainWindow):
         self.is_first_run = False
         self.check_first_run()
         self.setup_paths()
+        
+        # Create shortcut on first run
+        if self.is_first_run:
+            self.create_desktop_shortcut()
+            
         self.initUI()
 
     def setup_paths(self):
@@ -96,7 +103,7 @@ class GenieApp(QMainWindow):
         
         # Set up asset paths
         self.assets_path = os.path.join(self.app_path, 'assets')
-        self.logo_path = os.path.join(self.assets_path, 'logo.svg')
+        self.logo_path = os.path.join(self.assets_path, 'logo.png')
         
         # Set up hooks paths
         self.hooks_source = os.path.join(self.app_path, 'hooks')
@@ -126,13 +133,100 @@ class GenieApp(QMainWindow):
         # Load appropriate UI
         self.load_appropriate_ui()
 
+    def create_desktop_shortcut(self):
+        """Create desktop shortcut based on the operating system."""
+        try:
+            # Get the path to the executable
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                if platform.system().lower() == 'darwin':
+                    app_path = os.path.dirname(os.path.dirname(sys.executable))  # Get the .app bundle path
+                else:
+                    app_path = sys.executable
+            else:
+                # Running in development
+                logging.info("Not creating shortcut in development mode")
+                return
+
+            logging.info(f"Creating desktop shortcut for: {app_path}")
+            desktop_path = Path.home() / "Desktop"
+            os_type = platform.system().lower()
+            
+            if os_type == "windows":
+                try:
+                    import winshell
+                    from win32com.client import Dispatch
+                    
+                    shortcut_path = desktop_path / "Genie-Secrets.lnk"
+                    shell = Dispatch('WScript.Shell')
+                    shortcut = shell.CreateShortCut(str(shortcut_path))
+                    shortcut.Targetpath = app_path
+                    shortcut.IconLocation = f"{app_path},0"
+                    shortcut.save()
+                    logging.info(f"Windows shortcut created at: {shortcut_path}")
+                except ImportError:
+                    logging.error("Windows-specific modules not available")
+                    pass
+                    
+            elif os_type == "darwin":  # macOS
+                try:
+                    # For macOS, create an alias to the .app bundle
+                    app_path = Path(app_path)
+                    if app_path.suffix == '.app' or os.path.exists(str(app_path) + '.app'):
+                        if not app_path.suffix == '.app':
+                            app_path = Path(str(app_path) + '.app')
+                        
+                        alias_script = f'''
+                        tell application "Finder"
+                            make new alias file to POSIX file "{app_path}" at POSIX file "{desktop_path}"
+                        end tell
+                        '''
+                        logging.info(f"Creating macOS alias with script: {alias_script}")
+                        result = subprocess.run(['osascript', '-e', alias_script], capture_output=True, text=True)
+                        if result.returncode != 0:
+                            logging.error(f"Error creating macOS alias: {result.stderr}")
+                        else:
+                            logging.info("macOS alias created successfully")
+                except Exception as e:
+                    logging.error(f"Error creating macOS alias: {str(e)}")
+                    
+            elif os_type == "linux":
+                try:
+                    desktop_file = desktop_path / "Genie-Secrets.desktop"
+                    content = f"""[Desktop Entry]
+Name=Genie-Secrets
+Exec="{app_path}"
+Icon={app_path}
+Type=Application
+Categories=Utility;Development;
+"""
+                    desktop_file.write_text(content)
+                    os.chmod(desktop_file, 0o755)
+                    logging.info(f"Linux desktop entry created at: {desktop_file}")
+                except Exception as e:
+                    logging.error(f"Error creating Linux desktop entry: {str(e)}")
+                    
+        except Exception as e:
+            logging.error(f"Failed to create desktop shortcut: {str(e)}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
+
     def check_first_run(self):
-        config_path = os.path.expanduser('~/.genie/config')
-        self.is_first_run = not os.path.exists(config_path)
+        """Check if this is the first time the application is run."""
+        config_dir = os.path.expanduser('~/.genie')
+        config_file = os.path.join(config_dir, 'config')
+        
+        # Check if running as frozen executable
+        if not getattr(sys, 'frozen', False):
+            self.is_first_run = False
+            return
+            
+        self.is_first_run = not os.path.exists(config_file)
         if self.is_first_run:
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            with open(config_path, 'w') as f:
-                f.write('installed=true')
+            os.makedirs(config_dir, exist_ok=True)
+            with open(config_file, 'w') as f:
+                f.write('installed=true\n')
+                f.write(f'executable_path={sys.executable}\n')
 
     def load_appropriate_ui(self):
         if self.is_first_run:
@@ -633,6 +727,19 @@ class GenieApp(QMainWindow):
         self.web_view.setHtml(html_content)
         self._message_callback = callback
 
+    def get_hooks_path(self):
+        """Get the correct hooks path whether running from source or frozen executable."""
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable
+            if platform.system().lower() == 'darwin':
+                base_path = Path(sys._MEIPASS)
+            else:
+                base_path = Path(sys.executable).parent
+            return base_path / 'hooks'
+        else:
+            # Running in development
+            return Path(__file__).parent / 'hooks'
+
     def install_hooks(self):
         """Install Git hooks and necessary files."""
         try:
@@ -649,9 +756,14 @@ class GenieApp(QMainWindow):
             # Create genie directory
             os.makedirs(genie_dir, exist_ok=True)
             
+            # Get the source hooks directory
+            hooks_source = self.get_hooks_path()
+            if not hooks_source.exists():
+                raise FileNotFoundError(f"Hooks directory not found at {hooks_source}")
+            
             # Copy entire hooks directory structure
             import shutil
-            shutil.copytree(self.hooks_source, hooks_dir)
+            shutil.copytree(hooks_source, hooks_dir)
             
             # Make hook files executable
             hook_files = ['scan-repo', 'pre-commit', 'post-commit']
@@ -824,6 +936,11 @@ class GenieApp(QMainWindow):
         <html>
         <head>
             <title>Select Repository</title>
+            <script>
+                function handleBack() {
+                    console.log('action:back');
+                }
+            </script>
             <style>
                 body {
                     font-family: -apple-system, system-ui, sans-serif;
@@ -900,7 +1017,7 @@ class GenieApp(QMainWindow):
                 </div>
                 <div>
                     <button class="scan-btn" onclick="console.log('action:start_scan')" id="scanButton" disabled>Start Scan</button>
-                    <button class="back-btn" onclick="console.log('action:back')">Back</button>
+                    <button class="back-btn" onclick="handleBack()">Back</button>
                 </div>
             </div>
         </body>
@@ -1040,6 +1157,16 @@ class GenieApp(QMainWindow):
         self.web_view.setHtml(html_content)
 
 if __name__ == '__main__':
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(os.path.expanduser('~/.genie/genie.log'))
+        ]
+    )
+    
     app = QApplication(sys.argv)
     
     # Get the logo path
@@ -1047,7 +1174,7 @@ if __name__ == '__main__':
         app_path = sys._MEIPASS
     else:
         app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    logo_path = os.path.join(app_path, 'assets', 'logo.svg')
+    logo_path = os.path.join(app_path, 'assets', 'logo.png')
     
     # Show splash screen with SVG logo if it exists
     if os.path.exists(logo_path):
