@@ -39,7 +39,6 @@ class CustomWebEnginePage(QWebEnginePage):
         self.parent = parent
 
     def javaScriptConsoleMessage(self, level, message, line, source):
-        print(f"Debug: Received JavaScript message: {message}")  # Debug logging
         if message.startswith('action:'):
             action = message.split(':')[1]
             if action == 'install':
@@ -53,35 +52,24 @@ class CustomWebEnginePage(QWebEnginePage):
             elif action.startswith('open_report'):
                 try:
                     report_index = int(message.split(':')[2])
-                    print(f"Debug: Opening report at index {report_index}")
-                    
                     if not hasattr(self.parent, 'report_paths'):
-                        print("Debug: No report paths found")
                         return
                         
                     if report_index < 0 or report_index >= len(self.parent.report_paths):
-                        print(f"Debug: Invalid report index {report_index}")
                         return
                     
                     report_path = self.parent.report_paths[report_index]
-                    print(f"Debug: Opening report: {report_path}")
                     
                     if not os.path.exists(report_path):
-                        print(f"Debug: Report file not found: {report_path}")
                         return
                         
                     if not os.access(report_path, os.R_OK):
-                        print(f"Debug: Report file not readable: {report_path}")
                         return
 
-                    # Open in default browser
                     webbrowser.open('file://' + os.path.abspath(report_path))
-                    print("Debug: Browser open command executed")
                     
                 except Exception as e:
-                    print(f"Debug: Error opening report: {str(e)}")
-                    import traceback
-                    print(f"Debug: Traceback: {traceback.format_exc()}")
+                    pass
 
 class GenieApp(QMainWindow):
     def __init__(self):
@@ -145,10 +133,10 @@ class GenieApp(QMainWindow):
                     app_path = sys.executable
             else:
                 # Running in development
-                logging.info("Not creating shortcut in development mode")
+                # logging.info("Not creating shortcut in development mode")
                 return
 
-            logging.info(f"Creating desktop shortcut for: {app_path}")
+            # logging.info(f"Creating desktop shortcut for: {app_path}")
             desktop_path = Path.home() / "Desktop"
             os_type = platform.system().lower()
             
@@ -163,9 +151,9 @@ class GenieApp(QMainWindow):
                     shortcut.Targetpath = app_path
                     shortcut.IconLocation = f"{app_path},0"
                     shortcut.save()
-                    logging.info(f"Windows shortcut created at: {shortcut_path}")
+                    # logging.info(f"Windows shortcut created at: {shortcut_path}")
                 except ImportError:
-                    logging.error("Windows-specific modules not available")
+                    # logging.error("Windows-specific modules not available")
                     pass
                     
             elif os_type == "darwin":  # macOS
@@ -202,31 +190,41 @@ Categories=Utility;Development;
 """
                     desktop_file.write_text(content)
                     os.chmod(desktop_file, 0o755)
-                    logging.info(f"Linux desktop entry created at: {desktop_file}")
+                    # logging.info(f"Linux desktop entry created at: {desktop_file}")
                 except Exception as e:
                     logging.error(f"Error creating Linux desktop entry: {str(e)}")
                     
         except Exception as e:
-            logging.error(f"Failed to create desktop shortcut: {str(e)}")
+            # logging.error(f"Failed to create desktop shortcut: {str(e)}")
             import traceback
-            logging.error(f"Traceback: {traceback.format_exc()}")
+            # logging.error(f"Traceback: {traceback.format_exc()}")
 
     def check_first_run(self):
         """Check if this is the first time the application is run."""
         config_dir = os.path.expanduser('~/.genie')
         config_file = os.path.join(config_dir, 'config')
         
-        # Check if running as frozen executable
-        if not getattr(sys, 'frozen', False):
-            self.is_first_run = False
-            return
-            
-        self.is_first_run = not os.path.exists(config_file)
-        if self.is_first_run:
+        # Check if config file exists and contains installation status
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    config_content = f.read()
+                    if 'installed=true' in config_content:
+                        self.is_first_run = False
+                        return
+            except:
+                pass
+        
+        # If we reach here, either:
+        # - Config directory/file doesn't exist
+        # - Config file doesn't have installation status
+        # - There was an error reading the file
+        # In all these cases, we treat it as first run
+        self.is_first_run = True
+        
+        # Create config directory if it doesn't exist
+        if not os.path.exists(config_dir):
             os.makedirs(config_dir, exist_ok=True)
-            with open(config_file, 'w') as f:
-                f.write('installed=true\n')
-                f.write(f'executable_path={sys.executable}\n')
 
     def load_appropriate_ui(self):
         if self.is_first_run:
@@ -361,19 +359,16 @@ Categories=Utility;Development;
 
         # Get list of scan reports
         reports_dir = os.path.expanduser('~/.genie/hooks/.reports')
-        print(f"Debug: Looking for reports in {reports_dir}")
         reports_list = ""
-        
+
         if not os.path.exists(reports_dir):
-            print(f"Debug: Reports directory does not exist, creating it")
             os.makedirs(reports_dir, exist_ok=True)
-        
+
         if os.path.exists(reports_dir):
             reports = sorted(
                 [f for f in os.listdir(reports_dir) if f.startswith('scan_report_') and f.endswith('.html')],
                 reverse=True
             )
-            print(f"Debug: Found {len(reports)} reports")
             
             if reports:
                 reports_list = """
@@ -382,17 +377,14 @@ Categories=Utility;Development;
                         <div class="reports-list">
                 """
                 for i, report in enumerate(reports):
-                    # Extract timestamp from filename (format: scan_report_YYYYMMDD_HHMMSS.html)
                     timestamp = report.replace('scan_report_', '').replace('.html', '')
                     try:
-                        # Convert timestamp to readable format
                         date_obj = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
                         formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
                     except:
                         formatted_date = timestamp
 
                     report_path = os.path.join(reports_dir, report)
-                    print(f"Debug: Adding report {i}: {report_path}")
                     reports_list += f"""
                         <div class="report-item" onclick="handleReportClick({i})" style="cursor: pointer;">
                             <div class="report-icon">📄</div>
@@ -406,11 +398,8 @@ Categories=Utility;Development;
                         </div>
                     </div>
                 """
-                # Store the report paths for later use
                 self.report_paths = [os.path.join(reports_dir, report) for report in reports]
-                print(f"Debug: Stored {len(self.report_paths)} report paths")
             else:
-                print("Debug: No reports found, adding empty state message")
                 reports_list = """
                     <div class="reports-section">
                         <h2>Scan History</h2>
@@ -602,7 +591,7 @@ Categories=Utility;Development;
         if type == 'error':
             button_color = '#dc3545'  # Red for error
 
-        html_content = f"""
+        html_content = """
         <!DOCTYPE html>
         <html>
         <head>
@@ -680,7 +669,7 @@ Categories=Utility;Development;
                 .button:hover {{
                     transform: translateY(-2px);
                     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-                    background-color: {button_color if type == 'error' else '#053278'};
+                    background-color: {button_color_hover};
                 }}
                 
                 .button:active {{
@@ -696,7 +685,7 @@ Categories=Utility;Development;
                 </div>
                 <div class="title">{title}</div>
                 <div class="message">
-                    {message.replace('\\n', '<br>')}
+                    {message}
                 </div>
                 <button class="button" onclick="console.log('action:message_ok')">
                     {button_text}
@@ -712,8 +701,16 @@ Categories=Utility;Development;
             </script>
         </body>
         </html>
-        """
-        
+        """.format(
+            title=title,
+            button_color=button_color,
+            button_color_hover=button_color if type == 'error' else '#053278',
+            icon=icon,
+            message=message.replace('\n', '<br>'),
+            button_text=button_text,
+            type=type  # Add this line to pass the type parameter
+        )
+
         # Update message handler
         original_handler = self.web_page.javaScriptConsoleMessage
         def message_handler(level, msg, line, source):
@@ -1161,66 +1158,36 @@ if __name__ == '__main__':
         # Initialize QApplication first
         app = QApplication(sys.argv)
         
-        # Setup basic console logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler()]
-        )
-        
-        logging.info("Starting Genie application...")
-        logging.info(f"Python version: {sys.version}")
-        logging.info(f"Platform: {platform.platform()}")
-        logging.info(f"Working directory: {os.getcwd()}")
-        
+        # Get application path
         if getattr(sys, 'frozen', False):
-            logging.info(f"Running as frozen application")
-            logging.info(f"Executable path: {sys.executable}")
-            logging.info(f"MEIPASS: {sys._MEIPASS}")
             app_path = sys._MEIPASS
         else:
-            logging.info("Running in development mode")
             app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
         # Get the logo path
         logo_path = os.path.join(app_path, 'assets', 'logo.png')
-        logging.info(f"Logo path: {logo_path}")
         
         # Show splash screen with logo if it exists
+        splash = None
         if os.path.exists(logo_path):
-            logging.info("Loading splash screen...")
             splash_pix = QPixmap(logo_path)
             if not splash_pix.isNull():
                 splash = QSplashScreen(splash_pix)
                 splash.show()
-                logging.info("Splash screen shown")
-            else:
-                logging.warning("Failed to load logo for splash screen")
-                splash = None
-        else:
-            logging.warning(f"Logo file not found at {logo_path}")
-            splash = None
         
         # Initialize main window
-        logging.info("Initializing main window...")
         main = GenieApp()
         main.show()
-        logging.info("Main window shown")
         
         # Finish splash screen if it was shown
         if splash:
             splash.finish(main)
-            logging.info("Splash screen finished")
         
         # Start event loop
-        logging.info("Starting event loop...")
         exit_code = app.exec()
-        logging.info(f"Application exiting with code: {exit_code}")
         sys.exit(exit_code)
         
     except Exception as e:
-        logging.critical(f"Fatal error: {str(e)}", exc_info=True)
-        
         # Show error in GUI if possible
         try:
             if 'app' in locals():
