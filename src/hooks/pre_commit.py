@@ -6,6 +6,14 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
+import logging
+from typing import List, Dict, Any
+ 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
  
 # Add the hooks directory to Python path
 SCRIPT_DIR = Path(__file__).parent
@@ -66,32 +74,33 @@ def get_user_confirmation(prompt):
 def get_staged_files():
     """Get list of staged files."""
     try:
-        result = subprocess.run(['git', 'diff', '--cached', '--name-only'],
-                              check=True, capture_output=True, text=True)
-        return result.stdout.strip().split('\n')
-    except subprocess.CalledProcessError:
+        logging.info("Getting staged files...")
+        result = subprocess.run(
+            ['git', 'diff', '--cached', '--name-only'],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        files = [f for f in result.stdout.strip().split('\n') if f]
+        logging.info(f"Found {len(files)} staged files")
+        return files
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Error getting staged files: {e}")
         return []
- 
-def check_disallowed_files(staged_files):
-    """Check for disallowed file extensions."""
-    DISALLOWED_EXTENSIONS = {'.crt', '.cer', '.ca-bundle', '.p7b', '.p7c',
-                           '.p7s', '.pem', '.jceks', '.key', '.keystore',
-                           '.jks', '.p12', '.pfx'}
-    
-    disallowed_files = []
-    for file in staged_files:
-        if any(file.lower().endswith(ext) for ext in DISALLOWED_EXTENSIONS):
-            disallowed_files.append(file)
-    return disallowed_files
  
 def run_secret_scan():
     """Run the secret scanning script."""
     try:
+        logging.info("Initializing secret scanner...")
         scanner = SecretScanner()
-        results = scanner.scan_git_diff()
+        
+        logging.info("Scanning staged changes...")
+        results = scanner.scan_staged_changes()
+        
+        logging.info(f"Found {len(results)} potential secrets")
         return results
     except Exception as e:
-        print(f"Warning: Secret scan failed: {str(e)}", file=sys.stderr)
+        logging.error(f"Secret scan failed: {str(e)}")
         return []
  
 def create_window(title, width=800, height=600):
@@ -121,147 +130,323 @@ def create_window(title, width=800, height=600):
 class ValidationWindow:
     def __init__(self):
         self.results = {
-            "secrets": {"proceed": False, "messages": {}, "global_message": ""},
-            "disallowed": {"proceed": False, "messages": {}, "global_message": ""}
+            "secrets": {"proceed": False, "messages": {}, "global_message": ""}
         }
         self.windows = []
- 
-    def create_items_list(self, parent, items, item_type):
-        """Create a list view of all items."""
-        frame = ttk.Frame(parent, padding="10", relief="solid", borderwidth=1)
-        frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
- 
-        # Create a canvas with scrollbar for the items
-        canvas = tk.Canvas(frame)
-        scrollbar = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-        items_frame = ttk.Frame(canvas)
- 
+        self.ITEMS_PER_PAGE = 50  # Number of items to show per page
+        self.current_page = 1
+        self.justification_entries = []
+        
+    def create_items_list(self, parent: ttk.Frame, items: List[Dict[str, Any]], item_type: str) -> None:
+        """Create a scrollable list of items with their details."""
+        # Create a container frame for the scrollable area
+        container_frame = ttk.Frame(parent)
+        container_frame.pack(expand=True, fill=tk.BOTH, padx=20)
+        
+        # Create canvas and scrollbar - use system default colors
+        canvas = tk.Canvas(container_frame, height=350)
+        scrollbar = ttk.Scrollbar(container_frame, orient="vertical", command=canvas.yview)
+        
+        # Use tk.Frame with system default background
+        scrollable_frame = tk.Frame(canvas)
+        
+        # Configure scrolling
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+        
+        # Create the window in the canvas with proper width
+        # Use the parent's width minus padding for the scrollable frame
+        parent.update_idletasks()  # Force geometry update
+        canvas_width = parent.winfo_width() - 40  # Account for padding
+        if canvas_width <= 0:  # Fallback if parent width not available yet
+            canvas_width = 700
+        
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw", width=canvas_width)
         canvas.configure(yscrollcommand=scrollbar.set)
- 
-        # Pack scrollbar and canvas
-        scrollbar.pack(side="right", fill="y")
+        
+        # Add total count label
+        count_label = ttk.Label(
+            scrollable_frame,
+            text=f"Total {item_type}s found: {len(items)}",
+            font=('Helvetica', 12, 'bold')
+        )
+        count_label.pack(pady=5, padx=10, anchor="w")
+        
+        # Create a frame for each item
+        for i, item in enumerate(items, 1):
+            item_frame = ttk.Frame(scrollable_frame)
+            item_frame.pack(fill="x", padx=10, pady=5, anchor="w")
+            
+            # File path and line number
+            file_info = ttk.Label(
+                item_frame,
+                text=f"File: {item['file_path']}",
+                font=('Helvetica', 10, 'bold')
+            )
+            file_info.pack(anchor="w", fill="x")
+            
+            if 'line_number' in item:
+                line_info = ttk.Label(
+                    item_frame,
+                    text=f"Line {item['line_number']}",
+                    font=('Helvetica', 9)
+                )
+                line_info.pack(anchor="w", fill="x")
+            
+            # Content preview
+            if 'line' in item:
+                content_frame = ttk.Frame(item_frame)
+                content_frame.pack(fill="x", pady=2, anchor="w")
+                
+                content_label = ttk.Label(
+                    content_frame,
+                    text="Content:",
+                    font=('Helvetica', 9, 'bold')
+                )
+                content_label.pack(side="left", anchor="nw")
+                
+                # Use Text widget instead of Label for better wrapping and display
+                # Use a very light gray that works in both light and dark modes
+                content_text = tk.Text(
+                    content_frame, 
+                    wrap=tk.WORD,
+                    height=2,  # Show 2 lines by default
+                    width=canvas_width-100,  # Allow most of the width
+                    font=('Courier', 10),
+                    relief=tk.FLAT,
+                    padx=5,
+                    pady=5
+                )
+                content_text.insert(tk.END, item['line'])
+                content_text.config(state=tk.DISABLED)  # Make read-only
+                content_text.pack(side="left", fill="x", expand=True, padx=5)
+            
+            # Add separator
+            if i < len(items):
+                ttk.Separator(scrollable_frame, orient="horizontal").pack(
+                    fill="x", padx=10, pady=5
+                )
+        
+        # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
- 
-        # Create window inside canvas
-        canvas.create_window((0, 0), window=items_frame, anchor="nw")
- 
-        # Configure canvas scrolling
-        def configure_scroll_region(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-        items_frame.bind("<Configure>", configure_scroll_region)
- 
-        # Add items
-        for item in items:
-            item_frame = ttk.Frame(items_frame)
-            item_frame.pack(fill=tk.X, pady=2)
- 
-            if item_type == "secret":
-                ttk.Label(item_frame, text=f"File: {item['file']}", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
-                ttk.Label(item_frame, text=f"Line {item['line_number']}: {item['line']}", wraplength=700).pack(anchor=tk.W)
-            else:  # disallowed file
-                ttk.Label(item_frame, text=f"File: {item}", font=('Helvetica', 10, 'bold')).pack(anchor=tk.W)
-            ttk.Separator(items_frame, orient='horizontal').pack(fill=tk.X, pady=5)
- 
-        return frame
- 
+        scrollbar.pack(side="right", fill="y")
+        
+        # Add mouse wheel scrolling
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+    def show_questions_dialog(self, parent_window, items):
+        """Show dialog for answering required questions."""
+        dialog = tk.Toplevel(parent_window)
+        dialog.title("Required Questions")
+        dialog.transient(parent_window)
+        dialog.grab_set()
+        
+        # Calculate size and position
+        width = 600
+        height = 400
+        x = parent_window.winfo_x() + (parent_window.winfo_width() - width) // 2
+        y = parent_window.winfo_y() + (parent_window.winfo_height() - height) // 2
+        dialog.geometry(f"{width}x{height}+{x}+{y}")
+        
+        main_frame = ttk.Frame(dialog, padding="10")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Instructions
+        ttk.Label(
+            main_frame,
+            text="If you believe the flagged contents are false positives, please mark it as Secret-Scanning-Report-update. "
+                 "To do so, you please answer below questions that will be added to your commit message:",
+            wraplength=550,
+            justify=tk.LEFT,
+            font=('Helvetica', 10)
+        ).pack(pady=(0, 20))
+        
+        # Question 1
+        ttk.Label(
+            main_frame,
+            text="1. Justification for the deviation from HSBC's policy:",
+            wraplength=550,
+            font=('Helvetica', 10, 'bold')
+        ).pack(anchor="w", pady=(0, 5))
+        
+        justification_entry = ttk.Entry(main_frame)
+        justification_entry.pack(fill=tk.X, pady=(0, 15))
+        
+        # Question 2
+        ttk.Label(
+            main_frame,
+            text="2. Confirmation that all the findings are validated and confirmed to be not adding the credentials/secrets in code:",
+            wraplength=550,
+            font=('Helvetica', 10, 'bold')
+        ).pack(anchor="w", pady=(0, 5))
+        
+        confirmation_entry = ttk.Entry(main_frame)
+        confirmation_entry.pack(fill=tk.X, pady=(0, 15))
+        
+        # Result variable to store the answers
+        result = {"proceed": False, "justification": "", "confirmation": ""}
+        
+        def validate_and_proceed():
+            justification = justification_entry.get().strip()
+            confirmation = confirmation_entry.get().strip()
+            
+            # Check minimum word count (10 words)
+            if len(justification.split()) < 10 or len(confirmation.split()) < 10:
+                messagebox.showerror(
+                    "Validation Error",
+                    "Each answer must contain at least 10 words."
+                )
+                return
+            
+            result["proceed"] = True
+            result["justification"] = justification
+            result["confirmation"] = confirmation
+            dialog.quit()
+        
+        def on_cancel():
+            result["proceed"] = False
+            dialog.quit()
+        
+        # Buttons frame at the bottom
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
+        
+        # Center-align buttons using a nested frame
+        center_frame = ttk.Frame(button_frame)
+        center_frame.pack(anchor=tk.CENTER)
+        
+        ttk.Button(
+            center_frame, 
+            text="Cancel", 
+            command=on_cancel,
+            padding=(10, 5)
+        ).pack(side=tk.LEFT, padx=10)
+        
+        ttk.Button(
+            center_frame, 
+            text="Submit", 
+            command=validate_and_proceed,
+            padding=(10, 5)
+        ).pack(side=tk.LEFT, padx=10)
+        
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        dialog.mainloop()
+        
+        dialog.destroy()
+        return result
+
     def show_validation_window(self, title, items, item_type):
         """Show validation window for either secrets or disallowed files."""
         if not items:
             return True
- 
-        root = create_window(title)
-        self.windows.append(root)
- 
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
- 
-        # Header
-        warning_text = "⚠️ Potential secrets detected!" if item_type == "secret" else "⚠️ Disallowed files detected!"
-        ttk.Label(
-            main_frame,
-            text=warning_text,
-            font=('Helvetica', 14, 'bold'),
-            foreground='red'
-        ).pack(pady=(0, 10))
- 
-        # Create items list
-        self.create_items_list(main_frame, items, item_type)
- 
-        # Classification frame
-        class_frame = ttk.LabelFrame(main_frame, text="Classification", padding="10")
-        class_frame.pack(fill=tk.X, pady=(10, 0), padx=5)
- 
-        # Global message frame (visible by default for True Positive)
-        global_msg_frame = ttk.LabelFrame(main_frame, text="Justification Message (required for True Positive)", padding="10")
-        global_msg_frame.pack(fill=tk.X, pady=(10, 0), padx=5)
-        
-        global_msg_entry = ttk.Entry(global_msg_frame)
-        global_msg_entry.pack(fill=tk.X, expand=True)
- 
-        classification_var = tk.StringVar(value="true_positive")  # Default to True Positive
-        
-        def on_classification_change(*args):
-            # Show/hide message entry based on classification
-            if classification_var.get() == "true_positive":
-                # Ensure message frame is packed before buttons
-                global_msg_frame.pack(fill=tk.X, pady=(10, 0), padx=5, before=button_frame)
-            else:
-                global_msg_frame.pack_forget()
-                global_msg_entry.delete(0, tk.END)
- 
-        ttk.Radiobutton(class_frame, text="True Positive", variable=classification_var,
-                       value="true_positive", command=on_classification_change).pack(side=tk.LEFT, padx=10)
-        ttk.Radiobutton(class_frame, text="False Positive", variable=classification_var,
-                       value="false_positive", command=on_classification_change).pack(side=tk.LEFT, padx=10)
- 
-        # Buttons frame
-        button_frame = ttk.Frame(main_frame)
-        button_frame.pack(fill=tk.X, pady=(10, 0))
- 
-        def on_proceed():
-            classification = classification_var.get()
             
-            # If true positive, require a message
-            if classification == "true_positive" and not global_msg_entry.get().strip():
-                messagebox.showerror(
-                    "Validation Error",
-                    "Please provide a justification message for the True Positive items."
-                )
+        # Reset pagination for new window
+        self.current_page = 1
+        
+        root = create_window(title, width=900, height=700)  # Larger default window
+        self.windows.append(root)
+        
+        # Create main container with padding
+        main_container = ttk.Frame(root, padding="20")
+        main_container.pack(fill=tk.BOTH, expand=True)
+        
+        # Header with warning at the top
+        warning_frame = ttk.Frame(main_container)
+        warning_frame.pack(fill=tk.X, pady=(0, 20))
+        
+        warning_label = ttk.Label(
+            warning_frame,
+            text="⚠️ WARNING ⚠️",
+            font=('Helvetica', 14, 'bold')
+        )
+        warning_label.pack(pady=(0, 10))
+        
+        policy_text = ("You are about to violate HSBC's policy of not adding credential in the code. "
+                       "\n"
+                     "Should you decide to proceed, please proceed by clicking on \"Proceed\" button below. "
+                     "Once you click on Proceed, you will be required to answer a few questions before continuing with the commit. "
+                     "Please provide your responses in place of the following details in your commit comments. "
+                     "These responses will be recorded in the MOD2 Catalyst dashboard.\n\n"
+                     "Click \"Proceed\" to continue.")
+        policy_label = ttk.Label(
+            warning_frame,
+            text=policy_text,
+            wraplength=800,
+            justify=tk.CENTER
+        )
+        policy_label.pack(pady=(0, 10))
+        
+        # Create content frame for the scrollable area - make it take more space
+        content_frame = ttk.Frame(main_container)
+        content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
+        
+        # Create items list in the content frame
+        self.create_items_list(content_frame, items, item_type)
+        
+        # Create button frame at the bottom
+        button_frame = ttk.Frame(main_container)
+        button_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Center-align buttons
+        button_container = ttk.Frame(button_frame)
+        button_container.pack(anchor=tk.CENTER)
+        
+        def on_proceed():
+            # Show questions dialog
+            result = self.show_questions_dialog(root, items)
+            if not result["proceed"]:
                 return
             
-            # Collect results
-            self.results[item_type] = {
+            # Store results with answers
+            self.results["secrets"] = {
                 "proceed": True,
                 "messages": {
-                    item['file'] if item_type == "secret" else item: {"classification": classification}
+                    item['file_path']: {"classification": "reviewed"}
                     for item in items
                 },
-                "global_message": global_msg_entry.get().strip() if classification == "true_positive" else ""
+                "global_message": f"Justification: {result['justification']}\nConfirmation: {result['confirmation']}"
             }
+            
             root.quit()
- 
+        
         def on_abort():
-            # Reset results for this type
-            self.results[item_type] = {"proceed": False, "messages": {}, "global_message": ""}
+            self.results["secrets"] = {"proceed": False, "messages": {}, "global_message": ""}
             root.quit()
- 
-        ttk.Button(button_frame, text="Abort Commit", command=on_abort).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Proceed", command=on_proceed).pack(side=tk.LEFT, padx=5)
- 
+        
+        # Create larger buttons
+        ttk.Button(
+            button_container, 
+            text="Abort Commit", 
+            command=on_abort,
+            padding=(20, 10)  # Wider buttons
+        ).pack(side=tk.LEFT, padx=20)
+        
+        ttk.Button(
+            button_container, 
+            text="Proceed", 
+            command=on_proceed,
+            padding=(20, 10)  # Wider buttons
+        ).pack(side=tk.LEFT, padx=20)
+        
         # Handle window close button (X)
         def on_window_close():
-            on_abort()  # Use the same abort logic
+            on_abort()
             root.destroy()
- 
+        
         root.protocol("WM_DELETE_WINDOW", on_window_close)
         root.mainloop()
- 
+        
         # Clean up the window
         if root in self.windows:
             self.windows.remove(root)
         root.destroy()
- 
-        return self.results[item_type]["proceed"]
+        
+        return self.results["secrets"]["proceed"]
  
     def show_abort_window(self):
         """Show the abort window."""
@@ -273,8 +458,7 @@ class ValidationWindow:
         warning_label = ttk.Label(
             main_frame,
             text="⚠️ Commit Aborted",
-            font=('Helvetica', 16, 'bold'),
-            foreground='red'
+            font=('Helvetica', 16, 'bold')
         )
         warning_label.pack(pady=(0, 15))
         
@@ -286,7 +470,12 @@ class ValidationWindow:
         )
         message_label.pack(pady=(0, 20))
         
-        ok_button = ttk.Button(main_frame, text="OK", command=root.destroy)
+        ok_button = ttk.Button(
+            main_frame, 
+            text="OK", 
+            command=root.destroy,
+            padding=(10, 5)
+        )
         ok_button.pack()
         ok_button.pack_configure(anchor=tk.CENTER)
         
@@ -295,12 +484,11 @@ class ValidationWindow:
         root.grab_set()
         root.wait_window()
  
-    def run_validation(self, secrets_data, disallowed_data):
-        """Run the validation process for both secrets and disallowed files."""
+    def run_validation(self, secrets_data):
+        """Run the validation process for secrets."""
         # Reset results at the start of validation
         self.results = {
-            "secrets": {"proceed": False, "messages": {}, "global_message": ""},
-            "disallowed": {"proceed": False, "messages": {}, "global_message": ""}
+            "secrets": {"proceed": False, "messages": {}, "global_message": ""}
         }
  
         if secrets_data:
@@ -313,19 +501,9 @@ class ValidationWindow:
                 self.show_abort_window()
                 return False
  
-        if disallowed_data:
-            proceed = self.show_validation_window(
-                "Disallowed Files - Genie GitHooks",
-                disallowed_data,
-                "disallowed"
-            )
-            if not proceed:
-                self.show_abort_window()
-                return False
- 
         return True
  
-def save_metadata(validation_results, secrets_data, disallowed_files):
+def save_metadata(validation_results, secrets_data):
     """Save commit metadata for post-commit hook."""
     script_dir = get_script_dir()
     metadata_file = script_dir / ".commit_metadata.json"
@@ -333,8 +511,7 @@ def save_metadata(validation_results, secrets_data, disallowed_files):
     try:
         metadata = {
             "validation_results": validation_results,
-            "secrets_found": secrets_data,
-            "disallowed_files": disallowed_files
+            "secrets_found": secrets_data
         }
         
         with open(metadata_file, 'w', encoding='utf-8') as f:
@@ -357,20 +534,19 @@ def append_validation_messages():
             
         validation_results = metadata.get("validation_results", {})
         
-        # Collect messages for true positives
+        # Collect messages for secrets
         messages = []
-        for result_type in ["secrets", "disallowed"]:
-            result_data = validation_results.get(result_type, {})
-            type_messages = result_data.get("messages", {})
-            global_message = result_data.get("global_message", "")
-            
-            # If there are any true positives and a global message
-            true_positives = [item for item, data in type_messages.items()
-                            if data.get("classification") == "true_positive"]
-            
-            if true_positives and global_message:
-                items_list = ", ".join(true_positives)
-                messages.append(f"[{result_type.upper()}] {items_list}: {global_message}")
+        result_data = validation_results.get("secrets", {})
+        type_messages = result_data.get("messages", {})
+        global_message = result_data.get("global_message", "")
+        
+        # If there are any true positives and a global message
+        true_positives = [item for item, data in type_messages.items()
+                        if data.get("classification") == "true_positive"]
+        
+        if true_positives and global_message:
+            items_list = ", ".join(true_positives)
+            messages.append(f"[SECRETS] {items_list}: {global_message}")
         
         if messages:
             # Read current commit message
@@ -387,28 +563,38 @@ def append_validation_messages():
  
 def main():
     try:
+        logging.info("Starting pre-commit hook")
         check_python()
         check_git()
         
         staged_files = get_staged_files()
         if not staged_files:
+            logging.info("No files staged for commit")
             show_message_box("No files staged for commit.")
             sys.exit(0)
         
-        disallowed_files = check_disallowed_files(staged_files)
+        logging.info("Running secret scan...")
         secrets_data = run_secret_scan()
         
-        if secrets_data or disallowed_files:
+        if secrets_data:
+            logging.info("Showing validation window...")
             validation = ValidationWindow()
-            if not validation.run_validation(secrets_data, disallowed_files):
+            if not validation.run_validation(secrets_data):
+                logging.info("Validation failed or was aborted")
                 sys.exit(1)
-                
-            save_metadata(validation.results, secrets_data, disallowed_files)
+            
+            logging.info("Saving metadata...")
+            save_metadata(validation.results, secrets_data)
+            logging.info("Appending validation messages...")
             append_validation_messages()
         else:
-            save_metadata({}, [], [])
+            logging.info("No issues found, saving empty metadata")
+            save_metadata({}, [])
+        
+        logging.info("Pre-commit hook completed successfully")
             
     except Exception as e:
+        logging.error(f"Error in pre-commit hook: {str(e)}", exc_info=True)
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
  

@@ -37,8 +37,7 @@
         }}
         table {{ 
             width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
+            border-collapse: collapse; margin-top: 20px;
             table-layout: fixed;
         }}
         th, td {{ 
@@ -90,6 +89,32 @@
         .download-btn:hover {{
             background-color: #053278;
         }}
+        .tab-container {margin-top: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            background-color: #f0f0f0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .tab-button.active {
+            background-color: {primary_color};
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -106,127 +131,169 @@
             <p><strong>Timestamp:</strong> {git_metadata[timestamp]}</p>
         </div>
         {disallowed_files_section}
-        <h2>Potential Secrets Found:</h2>
-        <table id="secretsTable">
-            <tr>
-                <th style="width:5%">S.No</th>
-                <th style="width:25%">Filename</th>
-                <th style="width:10%">Line #</th>
-                <th style="width:60%">Secret</th>
-            </tr>
-            {secrets_table_rows}
-        </table>
+
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="showTab('diff-scan')">Diff Scan Results</button>
+                <button class="tab-button" onclick="showTab('repo-scan')">Repository Scan Results</button>
+            </div>
+
+            <div id="diff-scan" class="tab-content active">
+                <h2>Diff Scan - Potential Secrets Found:</h2>
+                <table id="diffSecretsTable">
+                    <tr>
+                        <th style="width:5%">S.No</th>
+                        <th style="width:25%">Filename</th>
+                        <th style="width:10%">Line #</th>
+                        <th style="width:60%">Secret</th>
+                    </tr>
+                    {diff_secrets_table_rows}
+                </table>
+            </div>
+
+            <div id="repo-scan" class="tab-content">
+                <h2>Repository Scan - Potential Secrets Found:</h2>
+                <table id="repoSecretsTable">
+                    <tr>
+                        <th style="width:5%">S.No</th>
+                        <th style="width:25%">Filename</th>
+                        <th style="width:10%">Line #</th>
+                        <th style="width:60%">Secret</th>
+                    </tr>
+                    {repo_secrets_table_rows}
+                </table>
+            </div>
+        </div>
     </div>
     <script>
-    document.getElementById("downloadButton").addEventListener("click", () => {{
-        // Get secrets table data
-        const secretsTable = document.getElementById("secretsTable");
-        const secretRows = secretsTable.querySelectorAll("tr:not(:first-child)");
-        const secrets = Array.from(secretRows).map((row, index) => {{
+    function showTab(tabId) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.classList.remove('active');
+        });
+
+        // Show selected tab
+        document.getElementById(tabId).classList.add('active');
+        document.querySelector(`[onclick="showTab('${tabId}')"]`).classList.add('active');
+    }
+
+    document.getElementById("downloadButton").addEventListener("click", () => {
+        // Get diff scan secrets
+        const diffSecretsTable = document.getElementById("diffSecretsTable");
+        const diffSecretRows = diffSecretsTable.querySelectorAll("tr:not(:first-child)");
+        const diffSecrets = Array.from(diffSecretRows).map((row, index) => {
             const cells = row.querySelectorAll("td");
-            return {{
+            return {
                 sno: cells[0]?.innerText || "",
                 filename: cells[1]?.innerText || "",
                 lineNumber: cells[2]?.innerText || "",
                 secret: cells[3]?.innerText || ""
-            }};
-        }});
+            };
+        });
 
-        // Get disallowed files data if it exists
-        const disallowedFilesSection = document.getElementById("disallowedFilesFound");
-        const disallowedRows = disallowedFilesSection ? 
-            Array.from(disallowedFilesSection.querySelectorAll("tr:not(:first-child)")) : [];
-        const disallowedFiles = disallowedRows.map(row => {{
+        // Get repo scan secrets
+        const repoSecretsTable = document.getElementById("repoSecretsTable");
+        const repoSecretRows = repoSecretsTable.querySelectorAll("tr:not(:first-child)");
+        const repoSecrets = Array.from(repoSecretRows).map((row, index) => {
             const cells = row.querySelectorAll("td");
-            return {{
+            return {
                 sno: cells[0]?.innerText || "",
-                filename: cells[1]?.innerText || ""
-            }};
-        }});
+                filename: cells[1]?.innerText || "",
+                lineNumber: cells[2]?.innerText || "",
+                secret: cells[3]?.innerText || ""
+            };
+        });
 
         // Create file name using current date
         const currentDate = new Date();
-        const formattedDate = currentDate.toLocaleDateString('en-GB', {{
+        const formattedDate = currentDate.toLocaleDateString('en-GB', {
             day: '2-digit', month: 'short', year: 'numeric'
-        }}).replace(' ', '_').replace(',', '');
-        const fileName = 'repo_scan_' + formattedDate + '.pdf';
+        }).replace(' ', '_').replace(',', '');
+        const fileName = 'scan_report_' + formattedDate + '.pdf';
 
         // Create the PDF document definition
-        const docDefinition = {{
+        const docDefinition = {
             pageOrientation: 'landscape',
             content: [
-                {{ text: '{title}', style: 'header' }},
-                {{ text: `Git Author: {git_metadata[author]}`, style: 'info' }},
-                {{ text: `Repository: {git_metadata[repo_name]}`, style: 'info' }},
-                {{ text: `Branch: {git_metadata[branch]}`, style: 'info' }},
-                {{ text: `Commit Hash: {git_metadata[commit_hash]}`, style: 'info' }},
-                {{ text: `Timestamp: {git_metadata[timestamp]}`, style: 'info' }},
-                // Disallowed Files Section
-                ...(disallowedFiles.length ? [
-                    {{ text: 'Disallowed Files Found:', style: 'subheader' }},
-                    {{
-                        table: {{
-                            headerRows: 1,
-                            widths: ['5%', '95%'],
-                            body: [
-                                [
-                                    {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                    {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }}
-                                ],
-                                ...disallowedFiles.map(file => [
-                                    {{ text: file.sno, alignment: 'center' }},
-                                    {{ text: file.filename }}
-                                ])
-                            ]
-                        }},
-                        margin: [0, 0, 0, 20]
-                    }}
-                ] : []),
-                // Secrets Section
-                {{ text: 'Potential Secrets Found:', style: 'subheader' }},
-                {{
-                    table: {{
+                { text: '{title}', style: 'header' },
+                { text: `Git Author: {git_metadata[author]}`, style: 'info' },
+                { text: `Repository: {git_metadata[repo_name]}`, style: 'info' },
+                { text: `Branch: {git_metadata[branch]}`, style: 'info' },
+                { text: `Commit Hash: {git_metadata[commit_hash]}`, style: 'info' },
+                { text: `Timestamp: {git_metadata[timestamp]}`, style: 'info' },
+                
+                // Diff Scan Section
+                { text: 'Diff Scan - Potential Secrets Found:', style: 'subheader' },
+                {
+                    table: {
                         headerRows: 1,
                         widths: ['5%', '25%', '10%', '60%'],
                         body: [
                             [
-                                {{ text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Filename', fillColor: '#E9E5E5', bold: true }},
-                                {{ text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' }},
-                                {{ text: 'Secret', fillColor: '#E9E5E5', bold: true }}
+                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Filename', fillColor: '#E9E5E5', bold: true },
+                                { text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Secret', fillColor: '#E9E5E5', bold: true }
                             ],
-                            ...secrets.map((secret, index) => [
-                                {{ text: secret.sno, alignment: 'center' }},
+                            ...diffSecrets.map((secret, index) => [
+                                { text: secret.sno, alignment: 'center' },
                                 secret.filename,
-                                {{ text: secret.lineNumber, alignment: 'center' }},
+                                { text: secret.lineNumber, alignment: 'center' },
                                 secret.secret
                             ])
                         ]
-                    }}
-                }}
+                    },
+                    margin: [0, 0, 0, 20]
+                },
+
+                // Repo Scan Section
+                { text: 'Repository Scan - Potential Secrets Found:', style: 'subheader' },
+                {
+                    table: {
+                        headerRows: 1,
+                        widths: ['5%', '25%', '10%', '60%'],
+                        body: [
+                            [
+                                { text: 'S.No', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Filename', fillColor: '#E9E5E5', bold: true },
+                                { text: 'Line #', fillColor: '#E9E5E5', bold: true, alignment: 'center' },
+                                { text: 'Secret', fillColor: '#E9E5E5', bold: true }
+                            ],
+                            ...repoSecrets.map((secret, index) => [
+                                { text: secret.sno, alignment: 'center' },
+                                secret.filename,
+                                { text: secret.lineNumber, alignment: 'center' },
+                                secret.secret
+                            ])
+                        ]
+                    }
+                }
             ],
-            styles: {{
-                header: {{
+            styles: {
+                header: {
                     fontSize: 18,
                     bold: true,
                     alignment: 'center',
                     margin: [0, 0, 0, 10]
-                }},
-                subheader: {{
+                },
+                subheader: {
                     fontSize: 14,
                     bold: true,
                     margin: [0, 10, 0, 5]
-                }},
-                info: {{
+                },
+                info: {
                     fontSize: 12,
                     margin: [0, 2, 0, 2]
-                }}
-            }}
-        }};
+                }
+            }
+        };
 
         // Generate and download the PDF
         pdfMake.createPdf(docDefinition).download(fileName);
-    }});
+    });
     </script>
 </body>
 </html> 
