@@ -1,0 +1,22 @@
+{
+  "validation_results": {
+    "secrets": {
+      "proceed": false,
+      "messages": {},
+      "global_message": ""
+    },
+    "disallowed": {
+      "proceed": true,
+      "messages": {
+        "sample.pem": {
+          "classification": "false_positive"
+        }
+      },
+      "global_message": ""
+    }
+  },
+  "secrets_found": [],
+  "disallowed_files": [
+    "sample.pem"
+  ]
+}
