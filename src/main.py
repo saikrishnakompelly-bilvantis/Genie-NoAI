@@ -4,7 +4,7 @@ import subprocess
 import webbrowser
 from pathlib import Path
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, 
-                            QFileDialog, QSplashScreen)
+                            QFileDialog, QSplashScreen, QSizePolicy)
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QIcon, QPixmap
@@ -45,8 +45,6 @@ class CustomWebEnginePage(QWebEnginePage):
                 self.parent.install_hooks()
             elif action == 'uninstall':
                 self.parent.uninstall_hooks()
-            elif action == 'scan':
-                self.parent.scan_repository()
             elif action == 'exit':
                 self.parent.close()
             elif action.startswith('open_report'):
@@ -110,7 +108,12 @@ class GenieApp(QMainWindow):
             icon = QIcon(self.logo_path)
             self.setWindowIcon(icon)
         
-        self.setGeometry(100, 100, 1000, 600)
+        # Set a smaller initial size and make window resizable
+        self.setGeometry(100, 100, 800, 700)
+        self.setMinimumSize(650, 500)  # Set minimum size
+        
+        # Allow window to resize automatically with content
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         # Create web view with custom page
         self.web_view = QWebEngineView()
@@ -331,8 +334,7 @@ Categories=Utility;Development;
             <div class="welcome-container">
                 {logo_html}
                 <h1>Welcome to Genie</h1>
-                <p>Genie is your trusted companion for scanning Git repositories and ensuring code security. 
-                   With powerful secret detection and file scanning capabilities, Genie helps keep your repositories clean and secure.</p>
+                <p>Genie helps enforce HSBC's coding guidelines by preventing credentials and secrets from being committed to your Git repositories.</p>
                 <p>To get started, click the button below to install Genie's Git hooks.</p>
                 <div class="button-container">
                     <button class="install-btn" onclick="console.log('action:install')">Install Hooks</button>
@@ -356,58 +358,6 @@ Categories=Utility;Development;
                     logo_html = f'<img src="data:image/svg+xml;base64,{base64_svg}" class="logo" alt="Genie Logo">'
             except Exception as e:
                 print(f"Error loading logo: {e}")
-
-        # Get list of scan reports
-        reports_dir = os.path.expanduser('~/.genie/hooks/.reports')
-        reports_list = ""
-
-        if not os.path.exists(reports_dir):
-            os.makedirs(reports_dir, exist_ok=True)
-
-        if os.path.exists(reports_dir):
-            reports = sorted(
-                [f for f in os.listdir(reports_dir) if f.startswith('scan_report_') and f.endswith('.html')],
-                reverse=True
-            )
-            
-            if reports:
-                reports_list = """
-                    <div class="reports-section">
-                        <h2>Scan History</h2>
-                        <div class="reports-list">
-                """
-                for i, report in enumerate(reports):
-                    timestamp = report.replace('scan_report_', '').replace('.html', '')
-                    try:
-                        date_obj = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
-                        formatted_date = date_obj.strftime('%B %d, %Y at %I:%M %p')
-                    except:
-                        formatted_date = timestamp
-
-                    report_path = os.path.join(reports_dir, report)
-                    reports_list += f"""
-                        <div class="report-item" onclick="handleReportClick({i})" style="cursor: pointer;">
-                            <div class="report-icon">📄</div>
-                            <div class="report-info">
-                                <div class="report-date">{formatted_date}</div>
-                                <div class="report-name">{report}</div>
-                            </div>
-                        </div>
-                    """
-                reports_list += """
-                        </div>
-                    </div>
-                """
-                self.report_paths = [os.path.join(reports_dir, report) for report in reports]
-            else:
-                reports_list = """
-                    <div class="reports-section">
-                        <h2>Scan History</h2>
-                        <div class="empty-state">
-                            <p>No scan reports available yet. Click "Scan Repository" to create one.</p>
-                        </div>
-                    </div>
-                """
 
         html_content = f"""
         <!DOCTYPE html>
@@ -450,8 +400,8 @@ Categories=Utility;Development;
                     font-size: 1.5rem;
                 }}
                 h2 {{
-                    font-size: 1.2rem;
-                    margin-bottom: 1rem;
+                    font-size: 1.3rem;
+                    margin: 1.5rem 0 1rem 0;
                 }}
                 .subtitle {{
                     color: #666;
@@ -460,7 +410,7 @@ Categories=Utility;Development;
                 }}
                 .button-container {{
                     display: grid;
-                    grid-template-columns: repeat(3, 1fr);
+                    grid-template-columns: repeat(2, 1fr);
                     gap: 1rem;
                     margin-bottom: 2rem;
                 }}
@@ -490,61 +440,38 @@ Categories=Utility;Development;
                 .exit-btn:hover {{
                     background-color: #5a6268;
                 }}
-                .reports-section {{
-                    margin-top: 1rem;
+                .usage-section {{
                     background: white;
-                    padding: 1.5rem;
-                    border-radius: 8px;
+                    border-radius: 12px;
                     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    padding: 1.5rem;
+                    margin-top: 1.5rem;
                 }}
-                .reports-list {{
-                    display: grid;
-                    gap: 1rem;
+                .usage-steps {{
+                    margin-top: 1rem;
                 }}
-                .empty-state {{
-                    text-align: center;
-                    color: #666;
-                    padding: 2rem;
+                .step {{
                     background: #f8f9fa;
-                    border-radius: 8px;
-                }}
-                .report-item {{
-                    display: flex;
-                    align-items: center;
+                    border-left: 4px solid #07439C;
                     padding: 1rem;
-                    background: #f8f9fa;
-                    border-radius: 8px;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
-                    -webkit-user-select: none;
-                    -moz-user-select: none;
-                    -ms-user-select: none;
-                    user-select: none;
+                    margin-bottom: 1rem;
+                    border-radius: 0 8px 8px 0;
                 }}
-                .report-item:hover {{
+                .step-header {{
+                    font-weight: 600;
+                    color: #07439C;
+                    margin-bottom: 0.5rem;
+                }}
+                .step-content {{
+                    color: #555;
+                    line-height: 1.5;
+                }}
+                code {{
                     background: #e9ecef;
-                    transform: translateX(5px);
-                }}
-                .report-item:active {{
-                    background: #dee2e6;
-                    transform: translateX(2px);
-                }}
-                .report-icon {{
-                    font-size: 1.5rem;
-                    margin-right: 1rem;
-                    color: #07439C;
-                }}
-                .report-info {{
-                    flex-grow: 1;
-                }}
-                .report-date {{
-                    font-weight: 500;
-                    color: #07439C;
-                }}
-                .report-name {{
-                    font-size: 0.8rem;
-                    color: #718096;
-                    margin-top: 0.25rem;
+                    padding: 0.2rem 0.4rem;
+                    border-radius: 4px;
+                    font-family: monospace;
+                    font-size: 0.9rem;
                 }}
             </style>
         </head>
@@ -553,16 +480,28 @@ Categories=Utility;Development;
                 {logo_html}
                 <div class="header-text">
                     <h1>Genie - Secret Scanning Tool</h1>
-                    <p class="subtitle">Secure your repositories with advanced secret detection</p>
+                    <p class="subtitle">Enhance your Git workflow with powerful hooks</p>
                 </div>
             </div>
             <div class="main-container">
                 <div class="button-container">
-                    <button class="action-btn" onclick="console.log('action:scan')">Scan Repository</button>
                     <button class="action-btn uninstall-btn" onclick="console.log('action:uninstall')">Uninstall Hooks</button>
                     <button class="action-btn exit-btn" onclick="console.log('action:exit')">Exit</button>
                 </div>
-                {reports_list}
+                
+                <div class="usage-section">
+                    <h2>How Genie Works</h2>
+                    <div class="tip">
+                        <p>Genie enhances your Git workflow by:</p>
+                        <ul>
+                            <li>Automatically scanning code for secrets during commits</li>
+                            <li>Prompting for justification when secrets are detected</li>
+                            <li>Adding justifications to commit messages</li>
+                            <li>Generating HTML reports of scan results</li>
+                            <li>Working with standard Git commands from any terminal</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </body>
         </html>
@@ -800,70 +739,163 @@ Categories=Utility;Development;
                         body {{
                             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
                             margin: 0;
-                            padding: 2rem;
+                            padding: 0;
                             background: #f5f5f5;
                             display: flex;
                             justify-content: center;
                             align-items: center;
-                            min-height: calc(100vh - 4rem);
+                            min-height: 100vh;
                         }}
                         .success-container {{
                             background: white;
                             border-radius: 16px;
                             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
                             padding: 2rem;
-                            max-width: 600px;
+                            max-width: 700px;
                             width: 90%;
-                            text-align: center;
+                        }}
+                        .success-header {{
+                            display: flex;
+                            align-items: center;
+                            margin-bottom: 2rem;
+                            border-bottom: 2px solid #f0f0f0;
+                            padding-bottom: 1rem;
                         }}
                         .success-icon {{
-                            color: #28a745;
-                            font-size: 4rem;
-                            margin-bottom: 1rem;
+                            background-color: #28a745;
+                            color: white;
+                            width: 50px;
+                            height: 50px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            border-radius: 50%;
+                            font-size: 24px;
+                            margin-right: 1rem;
                         }}
-                        h1 {{
+                        .success-title {{
                             color: #07439C;
-                            font-size: 2rem;
-                            margin: 1rem 0;
+                            font-size: 1.8rem;
+                            margin: 0;
                         }}
-                        p {{
+                        .installation-path {{
+                            background: #f8f9fa;
+                            border-radius: 8px;
+                            padding: 1rem;
+                            font-family: monospace;
+                            margin: 1.5rem 0;
+                            color: #555;
+                            border-left: 4px solid #07439C;
+                        }}
+                        .workflow-section {{
+                            margin-top: 2rem;
+                        }}
+                        .workflow-title {{
+                            color: #07439C;
+                            font-size: 1.3rem;
+                            margin-bottom: 1rem;
+                            display: flex;
+                            align-items: center;
+                        }}
+                        .workflow-title::before {{
+                            content: "🔄";
+                            margin-right: 0.5rem;
+                        }}
+                        .workflow-steps {{
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                            gap: 1rem;
+                            margin-bottom: 2rem;
+                        }}
+                        .workflow-step {{
+                            background: white;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 12px;
+                            padding: 1.2rem;
+                            transition: transform 0.2s, box-shadow 0.2s;
+                            position: relative;
+                            overflow: hidden;
+                        }}
+                        .workflow-step:hover {{
+                            transform: translateY(-5px);
+                            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+                        }}
+                        .step-icon {{
+                            font-size: 1.5rem;
+                            margin-bottom: 0.5rem;
+                            color: #07439C;
+                        }}
+                        .step-title {{
+                            font-weight: 600;
+                            color: #333;
+                            margin-bottom: 0.5rem;
+                        }}
+                        .step-description {{
                             color: #666;
-                            font-size: 1.1rem;
-                            line-height: 1.6;
-                            margin: 1rem 0;
+                            font-size: 0.9rem;
                         }}
                         .button-container {{
                             display: flex;
-                            gap: 1rem;
                             justify-content: center;
                             margin-top: 2rem;
                         }}
-                        .scan-btn {{
+                        .continue-btn {{
                             background-color: #07439C;
                             color: white;
                             border: none;
                             border-radius: 8px;
                             padding: 1rem 2rem;
-                            font-size: 1.2rem;
+                            font-size: 1.1rem;
                             font-weight: 500;
                             cursor: pointer;
-                            transition: all 0.3s ease;
+                            transition: background-color 0.3s, transform 0.2s;
                         }}
-                        .scan-btn:hover {{
+                        .continue-btn:hover {{
                             background-color: #053278;
                             transform: translateY(-2px);
-                            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
                         }}
                     </style>
                 </head>
                 <body>
                     <div class="success-container">
-                        <div class="success-icon">✓</div>
-                        <h1>Installation Successful!</h1>
+                        <div class="success-header">
+                            <div class="success-icon">✓</div>
+                            <h1 class="success-title">Installation Successful!</h1>
+                        </div>
+                        
                         <p>Genie has been successfully installed and configured. Your Git hooks are now set up and ready to use.</p>
-                        <p>Installation path: {hooks_dir}</p>
+                        
+                        <div class="workflow-section">
+                            <h2 class="workflow-title">How Genie Works</h2>
+                            <div class="workflow-steps">
+                                <div class="workflow-step">
+                                    <div class="step-icon">🔍</div>
+                                    <div class="step-title">Secret Scanning</div>
+                                    <div class="step-description">Automatically scans your code for secrets when you commit changes.</div>
+                                </div>
+                                
+                                <div class="workflow-step">
+                                    <div class="step-icon">❓</div>
+                                    <div class="step-title">Justification</div>
+                                    <div class="step-description">Prompts for explanations when potential secrets are detected.</div>
+                                </div>
+                                
+                                <div class="workflow-step">
+                                    <div class="step-icon">📝</div>
+                                    <div class="step-title">Documentation</div>
+                                    <div class="step-description">Adds your justifications to commit messages automatically.</div>
+                                </div>
+                                
+                                <div class="workflow-step">
+                                    <div class="step-icon">📊</div>
+                                    <div class="step-title">Reporting</div>
+                                    <div class="step-description">Generates detailed HTML reports of scan results.</div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="button-container">
-                            <button class="scan-btn" onclick="console.log('action:scan')">Start Scanning</button>
+                            <button class="continue-btn" onclick="console.log('action:message_ok')">Continue</button>
                         </div>
                     </div>
                 </body>
@@ -871,9 +903,18 @@ Categories=Utility;Development;
                 """
                 self.web_view.setHtml(success_html)
                 
-                # Update the UI based on installation status
-                self.is_first_run = False
-                self.load_main_ui()
+                # Update message handler to process the callback
+                original_handler = self.web_page.javaScriptConsoleMessage
+                def message_handler(level, msg, line, source):
+                    if msg == 'action:message_ok':
+                        # Set is_first_run to False and load the main UI
+                        self.is_first_run = False
+                        self.load_main_ui()
+                    else:
+                        original_handler(level, msg, line, source)
+                
+                # Apply the custom message handler
+                self.web_page.javaScriptConsoleMessage = message_handler
                 
             except subprocess.CalledProcessError as e:
                 self.show_message('Error', f'Failed to configure Git hooks: {str(e)}', 'error')
@@ -925,233 +966,6 @@ Categories=Utility;Development;
                 f'Unable to remove hooks:\n{str(e)}',
                 'error'
             )
-
-    def scan_repository(self):
-        # Create HTML for folder selection
-        folder_selection_html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Select Repository</title>
-            <script>
-                function handleBack() {
-                    console.log('action:back');
-                }
-            </script>
-            <style>
-                body {
-                    font-family: -apple-system, system-ui, sans-serif;
-                    margin: 20px;
-                    background: #f5f5f5;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                }
-                .container {
-                    max-width: 800px;
-                    background: white;
-                    padding: 30px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                    text-align: center;
-                }
-                h2 {
-                    color: #07439C;
-                    margin-bottom: 20px;
-                }
-                .selected-path {
-                    margin: 20px 0;
-                    padding: 10px;
-                    background: #f8f9fa;
-                    border-radius: 4px;
-                    word-break: break-all;
-                }
-                button {
-                    padding: 10px 20px;
-                    margin: 10px;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 14px;
-                    transition: background-color 0.3s;
-                }
-                .browse-btn {
-                    background-color: #07439C;
-                    color: white;
-                }
-                .browse-btn:hover {
-                    background-color: #053278;
-                }
-                .scan-btn {
-                    background-color: #07439C;
-                    color: white;
-                }
-                .scan-btn:hover {
-                    background-color: #053278;
-                }
-                .back-btn {
-                    background-color: #6c757d;
-                    color: white;
-                }
-                .back-btn:hover {
-                    background-color: #5a6268;
-                }
-                #selectedPath {
-                    color: #666;
-                    font-family: monospace;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>Select Repository to Scan</h2>
-                <div>
-                    <button class="browse-btn" onclick="console.log('action:browse')">Browse Repository</button>
-                </div>
-                <div class="selected-path">
-                    <p>Selected Path:</p>
-                    <p id="selectedPath">No repository selected</p>
-                </div>
-                <div>
-                    <button class="scan-btn" onclick="console.log('action:start_scan')" id="scanButton" disabled>Start Scan</button>
-                    <button class="back-btn" onclick="handleBack()">Back</button>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
-        self.web_view.setHtml(folder_selection_html)
-        self.selected_repo_path = None
-
-        # Update the CustomWebEnginePage class to handle new actions
-        def handle_browse():
-            repo_path = QFileDialog.getExistingDirectory(self, 'Select Git Repository')
-            if repo_path:
-                self.selected_repo_path = repo_path
-                self.web_view.page().runJavaScript(
-                    f"document.getElementById('selectedPath').textContent = '{repo_path}';"
-                    f"document.getElementById('scanButton').disabled = false;"
-                )
-
-        def handle_start_scan():
-            if self.selected_repo_path:
-                try:
-                    current_dir = os.getcwd()
-                    os.chdir(self.selected_repo_path)
-                    
-                    # Check if it's a git repository
-                    try:
-                        subprocess.run(['git', 'rev-parse', '--is-inside-work-tree'], 
-                                    check=True, capture_output=True)
-                    except subprocess.CalledProcessError:
-                        raise Exception("The selected directory is not a Git repository")
-                    
-                    # Run the scan using the git scan-repo command
-                    result = subprocess.run(['git', 'scan-repo'], 
-                                         capture_output=True, 
-                                         text=True)
-                    os.chdir(current_dir)
-                    
-                    if result.returncode == 0:
-                        # Return to main UI after scan completes
-                        self.load_main_ui()
-                    else:
-                        raise Exception(result.stderr or "An error occurred during the scan")
-                        
-                except Exception as e:
-                    os.chdir(current_dir)
-                    self.show_message(
-                        'Error',
-                        f'Failed to scan repository:\n{str(e)}',
-                        'error',
-                        self.scan_repository  # Callback to return to repository selection
-                    )
-
-        def handle_back():
-            self.load_main_ui()
-
-        # Add new message handlers to CustomWebEnginePage
-        original_message_handler = self.web_page.javaScriptConsoleMessage
-        def new_message_handler(level, message, line, source):
-            if message.startswith('action:'):
-                action = message.split(':')[1]
-                if action == 'browse':
-                    handle_browse()
-                elif action == 'start_scan':
-                    handle_start_scan()
-                elif action == 'back':
-                    handle_back()
-                elif action == 'message_ok':
-                    if hasattr(self, '_message_callback') and self._message_callback:
-                        self._message_callback()
-                        self._message_callback = None
-                else:
-                    original_message_handler(level, message, line, source)
-        
-        self.web_page.javaScriptConsoleMessage = new_message_handler
-
-    def show_scan_results(self, results):
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Scan Results</title>
-            <style>
-                body {{
-                    font-family: -apple-system, system-ui, sans-serif;
-                    margin: 20px;
-                    background: #f5f5f5;
-                }}
-                .container {{
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }}
-                h2 {{
-                    color: #07439C;
-                    margin-bottom: 20px;
-                }}
-                .results-container {{
-                    margin: 20px 0;
-                    padding: 20px;
-                    background: #f8f9fa;
-                    border-radius: 4px;
-                    overflow-x: auto;
-                }}
-                pre {{
-                    margin: 0;
-                    white-space: pre-wrap;
-                    font-family: monospace;
-                }}
-                .back-btn {{
-                    padding: 10px 20px;
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    margin-top: 20px;
-                }}
-                .back-btn:hover {{
-                    background-color: #5a6268;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>Scan Results</h2>
-                <div class="results-container">
-                    <pre>{results}</pre>
-                </div>
-                <button class="back-btn" onclick="console.log('action:back')">Back to Repository Selection</button>
-            </div>
-        </body>
-        </html>
-        """
-        self.web_view.setHtml(html_content)
 
 if __name__ == '__main__':
     try:
