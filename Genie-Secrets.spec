@@ -2,12 +2,13 @@
 
 import sys
 import os
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
 
 # Collect all data files
-data_files = [('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/post-commit', 'hooks/.'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/scan-repo', 'hooks/.'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/pre-commit', 'hooks/.'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/config.py', 'hooks/commit-scripts'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/secretscan.log', 'hooks/commit-scripts'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/secretscan.py', 'hooks/commit-scripts'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/utils.py', 'hooks/commit-scripts'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/__pycache__/secretscan.cpython-313.pyc', 'hooks/commit-scripts/__pycache__'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/hooks/commit-scripts/templates/report.html', 'hooks/commit-scripts/templates'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/assets/.DS_Store', 'assets/.'), ('/Users/sai.kompelly/Desktop/Genie-Secrets/src/assets/logo.png', 'assets/.')]
+data_files = [('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/pre_commit.py', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/secretscan.log', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/scan_repo.py', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/post_commit.py', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/post-commit', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/scan-repo', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/pre-commit', 'hooks'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/config.py', 'hooks/commit_scripts'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/secretscan.log', 'hooks/commit_scripts'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/secretscan.py', 'hooks/commit_scripts'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/__init__.py', 'hooks/commit_scripts'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/utils.py', 'hooks/commit_scripts'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/__pycache__/config.cpython-313.pyc', 'hooks/commit_scripts/__pycache__'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/__pycache__/utils.cpython-313.pyc', 'hooks/commit_scripts/__pycache__'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/__pycache__/__init__.cpython-313.pyc', 'hooks/commit_scripts/__pycache__'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/__pycache__/secretscan.cpython-313.pyc', 'hooks/commit_scripts/__pycache__'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/commit_scripts/templates/report.html', 'hooks/commit_scripts/templates'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/.commit-reports/repository-scan-report.html', 'hooks/.commit-reports'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/hooks/.commit-reports/scan-report.html', 'hooks/.commit-reports'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/assets/.DS_Store', 'assets'), ('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/assets/logo.png', 'assets')]
 
 # Collect Qt resources
 qt_data_files = []
@@ -34,8 +35,8 @@ except Exception as e:
     print(f"Warning: Could not collect Qt resources: {e}")
 
 a = Analysis(
-    [os.path.join('/Users/sai.kompelly/Desktop/Genie-Secrets/src', 'main.py')],
-    pathex=['/Users/sai.kompelly/Desktop/Genie-Secrets'],
+    [str(Path('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src') / 'main.py')],
+    pathex=[str(Path('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI'))],
     binaries=[],
     datas=data_files + qt_data_files,
     hiddenimports=[
@@ -44,7 +45,10 @@ a = Analysis(
         'PyQt6.QtWebChannel',
         'PyQt6.QtNetwork',
         'PyQt6.sip',
-        'PyQt6.QtPrintSupport'
+        'PyQt6.QtPrintSupport',
+        'PyQt6.QtWidgets',
+        'PyQt6.QtGui',
+        'PyQt6.QtCore'
     ],
     hookspath=[],
     hooksconfig={},
@@ -91,7 +95,7 @@ if sys.platform == 'darwin':
         console=True,  # Set to True temporarily for debugging
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join('/Users/sai.kompelly/Desktop/Genie-Secrets/src/assets', 'logo.png'),
+        icon=str(Path('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/assets') / 'logo.png'),
     )
     
     # Create .app bundle for macOS
@@ -101,7 +105,7 @@ if sys.platform == 'darwin':
         a.zipfiles,
         a.datas,
         name='Genie-Secrets.app',
-        icon=os.path.join('/Users/sai.kompelly/Desktop/Genie-Secrets/src/assets', 'logo.png'),
+        icon=str(Path('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/assets') / 'logo.png'),
         bundle_identifier='com.genie.secrets',
         info_plist={
             'CFBundleShortVersionString': '1.0.0',
@@ -139,5 +143,5 @@ else:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join('/Users/sai.kompelly/Desktop/Genie-Secrets/src/assets', 'logo.png'),
+        icon=str(Path('/Users/sai.kompelly/Desktop/Genie-Githooks-V2/Genie-NoAI/src/assets') / 'logo.png'),
     )

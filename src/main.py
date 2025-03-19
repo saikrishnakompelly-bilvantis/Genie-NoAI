@@ -14,6 +14,7 @@ from urllib.parse import quote, urljoin
 from urllib.request import pathname2url
 import platform
 import logging
+import shutil
 
 class ReportWindow(QMainWindow):
     def __init__(self, file_path):
@@ -679,50 +680,45 @@ Categories=Utility;Development;
     def install_hooks(self):
         """Install Git hooks and necessary files."""
         try:
-            # Get user's home directory
+            # Get the user's home directory
             home_dir = os.path.expanduser('~')
             genie_dir = os.path.join(home_dir, '.genie')
             hooks_dir = os.path.join(genie_dir, 'hooks')
             
-            # Clean up any existing installation first
-            if os.path.exists(genie_dir):
-                import shutil
-                shutil.rmtree(genie_dir)
+            # Create necessary directories
+            os.makedirs(hooks_dir, exist_ok=True)
             
-            # Create genie directory
-            os.makedirs(genie_dir, exist_ok=True)
-            
-            # Get the source hooks directory
-            hooks_source = self.get_hooks_path()
-            if not hooks_source.exists():
-                raise FileNotFoundError(f"Hooks directory not found at {hooks_source}")
-            
-            # Copy entire hooks directory structure
-            import shutil
-            shutil.copytree(hooks_source, hooks_dir)
-            
-            # Make hook files executable
-            hook_files = ['scan-repo', 'pre-commit', 'post-commit']
-            for hook in hook_files:
-                hook_path = os.path.join(hooks_dir, hook)
-                if os.path.exists(hook_path):
-                    os.chmod(hook_path, 0o755)
+            # Copy hook files
+            for hook_file in ['pre-commit', 'post-commit', 'scan-repo']:
+                source_file = os.path.join(self.hooks_source, hook_file)
+                target_file = os.path.join(hooks_dir, hook_file)
+                
+                if os.path.exists(source_file):
+                    shutil.copy2(source_file, target_file)
+                    # Make the file executable
+                    os.chmod(target_file, 0o755)
             
             # Set up Git configuration
             try:
                 # Remove any existing Git hooks configuration
                 subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                             check=False)  # Don't check as it might not exist
+                             check=False,  # Don't check as it might not exist
+                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
                 subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                             check=False)  # Don't check as it might not exist
+                             check=False,  # Don't check as it might not exist
+                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
                 
                 # Set up new Git hooks configuration
-                subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], check=True)
+                subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
+                             check=True,
+                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
                 
                 # Create git alias for scan-repo with absolute path
                 scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
                 alias_cmd = f'!bash "{scan_repo_path}"'
-                subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], check=True)
+                subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                             check=True,
+                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
                 
                 # Create a config file to store the hooks directory path and installation status
                 config_file = os.path.join(genie_dir, 'config')
@@ -928,10 +924,12 @@ Categories=Utility;Development;
         try:
             # Remove Git configurations first
             subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                         check=False)  # Don't check as it might not exist
+                         check=False,  # Don't check as it might not exist
+                         creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
             
             subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                         check=False)  # Don't check as it might not exist
+                         check=False,  # Don't check as it might not exist
+                         creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
             
             # Remove .genie directory completely
             genie_dir = os.path.expanduser('~/.genie')
@@ -944,12 +942,16 @@ Categories=Utility;Development;
                 raise Exception("Failed to remove .genie directory")
                 
             hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                      capture_output=True, text=True).stdout.strip()
+                                      capture_output=True, 
+                                      text=True,
+                                      creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
             if hooks_path:
                 raise Exception("Git hooks path still set")
                 
             scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                           capture_output=True, text=True).stdout.strip()
+                                           capture_output=True, 
+                                           text=True,
+                                           creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
             if scan_repo_alias:
                 raise Exception("Git scan-repo alias still set")
             
@@ -971,6 +973,9 @@ if __name__ == '__main__':
     try:
         # Initialize QApplication first
         app = QApplication(sys.argv)
+        
+        # Set application style to ensure consistent GUI appearance
+        app.setStyle('Fusion')
         
         # Get application path
         if getattr(sys, 'frozen', False):

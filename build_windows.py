@@ -9,11 +9,69 @@ import subprocess
 import logging
 from typing import Optional
 import PyInstaller.__main__
- 
+import time
+import psutil
+import ctypes
+from ctypes import wintypes
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
- 
+
+def kill_processes_using_dlls(directory: Path):
+    """Kill processes that are using DLLs in the specified directory."""
+    try:
+        # Kill any Python processes first
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                if 'python' in proc.info['name'].lower():
+                    logger.info(f"Killing Python process {proc.info['name']} (PID: {proc.info['pid']})")
+                    proc.kill()
+                    time.sleep(0.5)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+
+        # Then kill processes using DLLs
+        for proc in psutil.process_iter(['pid', 'name', 'open_files']):
+            try:
+                if proc.info['open_files']:
+                    for file in proc.info['open_files']:
+                        if str(directory) in file:
+                            logger.info(f"Killing process {proc.info['name']} (PID: {proc.info['pid']})")
+                            proc.kill()
+                            time.sleep(0.5)
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                pass
+
+        # Additional wait to ensure processes are terminated
+        time.sleep(1)
+    except Exception as e:
+        logger.warning(f"Failed to kill processes: {e}")
+
+def force_delete_file(file_path: Path, max_retries: int = 3):
+    """Force delete a file using Windows API with retries."""
+    for attempt in range(max_retries):
+        try:
+            # Convert path to Windows format
+            path = str(file_path).replace('/', '\\')
+            # Get handle to file
+            handle = ctypes.windll.kernel32.CreateFileW(
+                path,
+                wintypes.DWORD(0x80000000),  # GENERIC_READ
+                0,  # No sharing
+                None,
+                wintypes.DWORD(3),  # OPEN_EXISTING
+                wintypes.DWORD(0x02000000),  # FILE_FLAG_DELETE_ON_CLOSE
+                None
+            )
+            if handle != -1:
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+        except Exception as e:
+            logger.warning(f"Attempt {attempt + 1} failed to force delete {file_path}: {e}")
+            time.sleep(0.5)  # Wait before retry
+    return False
+
 class WindowsBuilder:
     def __init__(self):
         if platform.system().lower() != 'windows':
@@ -36,7 +94,7 @@ class WindowsBuilder:
  
     def check_dependencies(self) -> bool:
         """Check if required build dependencies are installed."""
-        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow', 'pywin32', 'winshell']
+        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow', 'pywin32', 'winshell', 'psutil']
         missing_packages = []
         
         for package in required_packages:
@@ -56,13 +114,74 @@ class WindowsBuilder:
                 return False
         
         return True
+
+    def get_qt_paths(self):
+        """Get Qt installation paths."""
+        try:
+            import PyQt6
+            qt_path = os.path.dirname(PyQt6.__file__)
+            qt_plugins_path = os.path.join(qt_path, "Qt6", "plugins")
+            qt_translations_path = os.path.join(qt_path, "Qt6", "translations")
+            qt_resources_path = os.path.join(qt_path, "Qt6", "resources")
+            return {
+                'qt_path': qt_path,
+                'plugins_path': qt_plugins_path,
+                'translations_path': qt_translations_path,
+                'resources_path': qt_resources_path
+            }
+        except Exception as e:
+            logger.error(f"Failed to get Qt paths: {e}")
+            return None
  
     def clean_build_dirs(self):
         """Clean up previous build artifacts."""
         logger.info("Cleaning build directories...")
+        
+        # Kill any processes using DLLs in the dist directory
+        if self.dist_dir.exists():
+            kill_processes_using_dlls(self.dist_dir)
+            time.sleep(2)  # Give more time for processes to terminate
+        
+        def remove_readonly(func, path, _):
+            """Clear the readonly bit and reattempt the removal."""
+            try:
+                # Clear the readonly bit
+                os.chmod(path, 0o777)
+                func(path)
+            except Exception as e:
+                logger.warning(f"Failed to remove {path}: {e}")
+                # Try force delete
+                if force_delete_file(Path(path)):
+                    logger.info(f"Successfully force deleted {path}")
+                else:
+                    logger.warning(f"Failed to force delete {path}")
+
         for dir_path in [self.dist_dir, self.build_dir]:
             if dir_path.exists():
-                shutil.rmtree(dir_path)
+                try:
+                    shutil.rmtree(dir_path, onerror=remove_readonly)
+                except Exception as e:
+                    logger.warning(f"Failed to remove directory {dir_path}: {e}")
+                    # Try to remove individual files
+                    try:
+                        for root, dirs, files in os.walk(dir_path, topdown=False):
+                            for name in files:
+                                file_path = Path(root) / name
+                                try:
+                                    os.chmod(file_path, 0o777)
+                                    os.remove(file_path)
+                                except Exception as e:
+                                    logger.warning(f"Failed to remove file {file_path}: {e}")
+                                    force_delete_file(file_path)
+                            for name in dirs:
+                                dir_path = Path(root) / name
+                                try:
+                                    os.chmod(dir_path, 0o777)
+                                    os.rmdir(dir_path)
+                                except Exception as e:
+                                    logger.warning(f"Failed to remove directory {dir_path}: {e}")
+                    except Exception as e:
+                        logger.error(f"Failed to clean directory {dir_path}: {e}")
         
         # Create directories if they don't exist
         os.makedirs(self.dist_dir, exist_ok=True)
@@ -74,33 +193,119 @@ class WindowsBuilder:
         
         # Add hooks directory with proper relative paths
         if self.hooks_dir.exists():
+            logger.info(f"Found hooks directory at: {self.hooks_dir}")
             for root, _, files in os.walk(self.hooks_dir):
                 for file in files:
                     full_path = Path(root) / file
                     # Calculate the relative path to maintain directory structure
                     target_dir = Path('hooks') / Path(root).relative_to(self.hooks_dir)
                     data_files.append((str(full_path), str(target_dir)))
- 
+                    logger.info(f"Adding hook file: {full_path} -> {target_dir}")
+        else:
+            logger.warning(f"Hooks directory not found at: {self.hooks_dir}")
+            # Create an empty hooks directory if it doesn't exist
+            os.makedirs(self.hooks_dir, exist_ok=True)
+            logger.info(f"Created empty hooks directory at: {self.hooks_dir}")
+
         # Add assets directory with proper relative paths
         if self.assets_dir.exists():
             for root, _, files in os.walk(self.assets_dir):
                 for file in files:
                     full_path = Path(root) / file
-                    # Calculate the relative path to maintain directory structure
                     target_dir = Path('assets') / Path(root).relative_to(self.assets_dir)
                     data_files.append((str(full_path), str(target_dir)))
- 
+
+        # Add Qt WebEngine specific files
+        qt_paths = self.get_qt_paths()
+        if qt_paths:
+            # Add WebEngine resources
+            webengine_resources = [
+                'qtwebengine_devtools_resources.pak',
+                'qtwebengine_resources.pak',
+                'qtwebengine_resources_100p.pak',
+                'qtwebengine_resources_200p.pak'
+            ]
+            
+            for resource in webengine_resources:
+                resource_path = os.path.join(qt_paths['resources_path'], resource)
+                if os.path.exists(resource_path):
+                    data_files.append((resource_path, 'resources'))
+
+            # Add WebEngine translations
+            if os.path.exists(qt_paths['translations_path']):
+                for file in os.listdir(qt_paths['translations_path']):
+                    if file.startswith('qtwebengine'):
+                        source = os.path.join(qt_paths['translations_path'], file)
+                        data_files.append((source, 'translations'))
+
+            # Add WebEngine plugins
+            webengine_plugins = ['platforms', 'webenginecore', 'imageformats']
+            for plugin in webengine_plugins:
+                plugin_path = os.path.join(qt_paths['plugins_path'], plugin)
+                if os.path.exists(plugin_path):
+                    for file in os.listdir(plugin_path):
+                        if file.endswith('.dll'):
+                            source = os.path.join(plugin_path, file)
+                            data_files.append((source, os.path.join('PyQt6', 'Qt6', plugin)))
+
+        # Log all collected data files
+        logger.info("Collected data files:")
+        for source, target in data_files:
+            logger.info(f"  {source} -> {target}")
+
         return data_files
  
+    def create_version_info(self):
+        """Create version info file for Windows."""
+        try:
+            # Convert version string to comma-separated integers for Windows version info
+            version_parts = [int(x) for x in self.version.split('.')]
+            while len(version_parts) < 4:
+                version_parts.append(0)
+            version_str = ', '.join(str(x) for x in version_parts)
+            
+            version_info = f'''VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers={version_parts},
+    prodvers={version_parts},
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          u'040904B0',
+          [StringStruct(u'CompanyName', u'{self.author}'),
+           StringStruct(u'FileDescription', u'{self.description}'),
+           StringStruct(u'FileVersion', u'{self.version}'),
+           StringStruct(u'InternalName', u'{self.app_name}'),
+           StringStruct(u'LegalCopyright', u'Copyright (c) 2024'),
+           StringStruct(u'OriginalFilename', u'{self.app_name}.exe'),
+           StringStruct(u'ProductName', u'{self.app_name}'),
+           StringStruct(u'ProductVersion', u'{self.version}')])
+      ]
+    ),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+'''
+            version_info_path = self.project_root / 'file_version_info.txt'
+            with open(version_info_path, 'w') as f:
+                f.write(version_info)
+            logger.info(f"Created version info file at: {version_info_path}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to create version info file: {e}")
+            return False
+
     def generate_spec_file(self):
         """Generate PyInstaller spec file content."""
         data_files = self.collect_data_files()
-        
-        # Convert version string to comma-separated integers for Windows version info
-        version_parts = [int(x) for x in self.version.split('.')]
-        while len(version_parts) < 4:
-            version_parts.append(0)
-        version_str = ', '.join(str(x) for x in version_parts)
         
         spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
  
@@ -114,46 +319,11 @@ block_cipher = None
 # Collect all data files
 data_files = {data_files}
  
-# Collect Qt resources
-qt_data_files = []
-try:
-    from PyQt6.QtCore import QLibraryInfo
-    qt_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.DataPath)
-    resources_path = os.path.join(qt_path, "resources")
-    translations_path = os.path.join(qt_path, "translations")
-    plugins_path = QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath)
-    
-    # Add resources
-    if os.path.exists(resources_path):
-        for file in os.listdir(resources_path):
-            if file.startswith('qtwebengine'):
-                source = os.path.join(resources_path, file)
-                qt_data_files.append((source, "resources"))
-    
-    # Add translations
-    if os.path.exists(translations_path):
-        for file in os.listdir(translations_path):
-            if file.startswith('qtwebengine'):
-                source = os.path.join(translations_path, file)
-                qt_data_files.append((source, "translations"))
-                
-    # Add necessary plugins
-    plugin_dirs = ['platforms', 'styles', 'webenginecore', 'imageformats']
-    for plugin_dir in plugin_dirs:
-        plugin_path = os.path.join(plugins_path, plugin_dir)
-        if os.path.exists(plugin_path):
-            for file in os.listdir(plugin_path):
-                if file.endswith('.dll'):
-                    source = os.path.join(plugin_path, file)
-                    qt_data_files.append((source, os.path.join('PyQt6', 'Qt6', plugin_dir)))
-except Exception as e:
-    print(f"Warning: Could not collect Qt resources: {{e}}")
- 
 a = Analysis(
     [str(Path(r'{self.src_dir}') / 'main.py')],
     pathex=[str(Path(r'{self.project_root}'))],
     binaries=[],
-    datas=data_files + qt_data_files,
+    datas=data_files,
     hiddenimports=[
         'PyQt6.QtWebEngineCore',
         'PyQt6.QtWebEngineWidgets',
@@ -165,7 +335,7 @@ a = Analysis(
         'PyQt6.QtGui',
         'PyQt6.QtCore'
     ],
-    hookspath=[],
+    hookspath=[str(Path(r'{self.hooks_dir}'))],
     hooksconfig={{}},
     runtime_hooks=[],
     excludes=[],
@@ -174,25 +344,6 @@ a = Analysis(
     cipher=block_cipher,
     noarchive=False,
 )
- 
-# Add WebEngine resources for PyQt6
-try:
-    from PyQt6.QtWebEngineCore import QWebEngineUrlScheme
-    import shutil
-    import PyQt6
-    
-    qt_path = os.path.dirname(PyQt6.__file__)
-    web_engine_path = os.path.join(qt_path, "Qt6", "resources")
-    
-    if os.path.exists(web_engine_path):
-        web_engine_files = []
-        for filename in os.listdir(web_engine_path):
-            if filename.startswith("qtwebengine"):
-                source = os.path.join(web_engine_path, filename)
-                web_engine_files.append((source, "."))
-        a.datas.extend(web_engine_files)
-except ImportError:
-    pass
  
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
  
@@ -203,15 +354,20 @@ exe = EXE(
     exclude_binaries=True,
     name='{self.app_name}',
     debug=False,
-    bootloader_ignore_signals=False,
+    bootloader_ignore_signals=True,  # Ignore signals to prevent console
     strip=False,
     upx=True,
-    console=False,  # Set to False for Windows GUI application
-    disable_windowed_traceback=False,
+    console=False,  # Set to False to hide console window
+    disable_windowed_traceback=True,  # Prevent error popups
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=str(Path(r'{self.assets_dir}') / 'logo.png'),
+    uac_admin=False,  # Don't request admin privileges
+    version='file_version_info.txt',  # Add version info
+    win_private_assemblies=False,  # Prevent DLL loading issues
+    runtime_tmpdir=None,  # Prevent temp directory creation
+    argv_emulation=False,  # Prevent command line argument handling
 )
 
 coll = COLLECT(
@@ -230,6 +386,41 @@ coll = COLLECT(
             f.write(spec_content)
         return spec_file
  
+    def copy_hooks_to_dist(self):
+        """Copy hooks directory to the final distribution directory."""
+        try:
+            dist_hooks_dir = self.dist_dir / self.app_name / "hooks"
+            logger.info(f"Copying hooks from {self.hooks_dir} to {dist_hooks_dir}")
+            
+            # Create hooks directory in dist if it doesn't exist
+            os.makedirs(dist_hooks_dir, exist_ok=True)
+            
+            # Copy all files from src/hooks to dist/hooks
+            if self.hooks_dir.exists():
+                for root, _, files in os.walk(self.hooks_dir):
+                    for file in files:
+                        src_file = Path(root) / file
+                        # Calculate relative path from hooks_dir
+                        rel_path = src_file.relative_to(self.hooks_dir)
+                        dst_file = dist_hooks_dir / rel_path
+                        
+                        # Create destination directory if it doesn't exist
+                        os.makedirs(dst_file.parent, exist_ok=True)
+                        
+                        # Copy the file
+                        shutil.copy2(src_file, dst_file)
+                        logger.info(f"Copied hook file: {src_file} -> {dst_file}")
+            else:
+                logger.warning(f"Source hooks directory not found at: {self.hooks_dir}")
+                # Create an empty hooks directory
+                os.makedirs(dist_hooks_dir, exist_ok=True)
+                logger.info(f"Created empty hooks directory at: {dist_hooks_dir}")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Failed to copy hooks directory: {e}")
+            return False
+
     def build(self) -> Optional[Path]:
         """Build the executable."""
         try:
@@ -238,6 +429,12 @@ coll = COLLECT(
 
             # Clean previous builds
             self.clean_build_dirs()
+            time.sleep(1)  # Give time for cleanup to complete
+
+            # Create version info file first
+            if not self.create_version_info():
+                logger.error("Failed to create version info file")
+                return None
 
             # Generate spec file
             spec_file = self.generate_spec_file()
@@ -255,6 +452,11 @@ coll = COLLECT(
 
             if not executable_path.exists():
                 logger.error(f"Build failed: Executable not found at {executable_path}")
+                return None
+
+            # Copy hooks directory to the final distribution
+            if not self.copy_hooks_to_dist():
+                logger.error("Failed to copy hooks directory to distribution")
                 return None
 
             logger.info(f"Build successful! Executable created at: {executable_path}")
