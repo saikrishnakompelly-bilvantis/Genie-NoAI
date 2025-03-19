@@ -19,7 +19,7 @@ class WindowsBuilder:
         if platform.system().lower() != 'windows':
             raise RuntimeError("This script is intended to be run on Windows only")
             
-        self.project_root = Path(__file__).parent
+        self.project_root = Path(__file__).resolve().parent
         self.dist_dir = self.project_root / "dist"
         self.build_dir = self.project_root / "build"
         self.src_dir = self.project_root / "src"
@@ -36,7 +36,7 @@ class WindowsBuilder:
  
     def check_dependencies(self) -> bool:
         """Check if required build dependencies are installed."""
-        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow']
+        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow', 'pywin32', 'winshell']
         missing_packages = []
         
         for package in required_packages:
@@ -63,6 +63,10 @@ class WindowsBuilder:
         for dir_path in [self.dist_dir, self.build_dir]:
             if dir_path.exists():
                 shutil.rmtree(dir_path)
+        
+        # Create directories if they don't exist
+        os.makedirs(self.dist_dir, exist_ok=True)
+        os.makedirs(self.build_dir, exist_ok=True)
  
     def collect_data_files(self):
         """Collect all necessary data files."""
@@ -72,17 +76,19 @@ class WindowsBuilder:
         if self.hooks_dir.exists():
             for root, _, files in os.walk(self.hooks_dir):
                 for file in files:
-                    full_path = os.path.join(root, file)
-                    target_dir = os.path.join('hooks', os.path.relpath(root, self.hooks_dir))
-                    data_files.append((full_path, target_dir))
+                    full_path = Path(root) / file
+                    # Calculate the relative path to maintain directory structure
+                    target_dir = Path('hooks') / Path(root).relative_to(self.hooks_dir)
+                    data_files.append((str(full_path), str(target_dir)))
  
         # Add assets directory with proper relative paths
         if self.assets_dir.exists():
             for root, _, files in os.walk(self.assets_dir):
                 for file in files:
-                    full_path = os.path.join(root, file)
-                    target_dir = os.path.join('assets', os.path.relpath(root, self.assets_dir))
-                    data_files.append((full_path, target_dir))
+                    full_path = Path(root) / file
+                    # Calculate the relative path to maintain directory structure
+                    target_dir = Path('assets') / Path(root).relative_to(self.assets_dir)
+                    data_files.append((str(full_path), str(target_dir)))
  
         return data_files
  
@@ -90,10 +96,17 @@ class WindowsBuilder:
         """Generate PyInstaller spec file content."""
         data_files = self.collect_data_files()
         
+        # Convert version string to comma-separated integers for Windows version info
+        version_parts = [int(x) for x in self.version.split('.')]
+        while len(version_parts) < 4:
+            version_parts.append(0)
+        version_str = ', '.join(str(x) for x in version_parts)
+        
         spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
  
 import sys
 import os
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
  
 block_cipher = None
@@ -137,8 +150,8 @@ except Exception as e:
     print(f"Warning: Could not collect Qt resources: {{e}}")
  
 a = Analysis(
-    [os.path.join(r'{self.src_dir}', 'main.py')],
-    pathex=[r'{self.project_root}'],
+    [str(Path(r'{self.src_dir}') / 'main.py')],
+    pathex=[str(Path(r'{self.project_root}'))],
     binaries=[],
     datas=data_files + qt_data_files,
     hiddenimports=[
@@ -186,60 +199,33 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='{self.app_name}',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,  # Set to False for Windows GUI application
     disable_windowed_traceback=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=os.path.join(r'{self.assets_dir}', 'logo.png'),
-    version='{self.version}',
-    uac_admin=False,
+    icon=str(Path(r'{self.assets_dir}') / 'logo.png'),
 )
- 
-# Create version info
-version_info = VSVersionInfo(
-    ffi=FixedFileInfo(
-        filevers=({', '.join([str(int(x)) for x in self.version.split('.')])}),
-        prodvers=({', '.join([str(int(x)) for x in self.version.split('.')])}),
-        mask=0x3f,
-        flags=0x0,
-        OS=0x40004,
-        fileType=0x1,
-        subtype=0x0,
-        date=(0, 0)
-    ),
-    kids=[
-        StringFileInfo([
-            StringTable(
-                '040904B0',
-                [
-                    StringStruct('CompanyName', '{self.author}'),
-                    StringStruct('FileDescription', '{self.description}'),
-                    StringStruct('FileVersion', '{self.version}'),
-                    StringStruct('InternalName', '{self.app_name}'),
-                    StringStruct('LegalCopyright', ' {self.author}'),
-                    StringStruct('OriginalFilename', '{self.app_name}.exe'),
-                    StringStruct('ProductName', '{self.app_name}'),
-                    StringStruct('ProductVersion', '{self.version}')
-                ]
-            )
-        ]),
-        VarFileInfo([VarStruct('Translation', [0x409, 1200])])
-    ]
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='{self.app_name}',
 )
 """
-        spec_file = os.path.join(self.project_root, f"{self.app_name}_windows.spec")
+        spec_file = self.project_root / f"{self.app_name}_windows.spec"
         with open(spec_file, 'w') as f:
             f.write(spec_content)
         return spec_file
@@ -253,31 +239,19 @@ version_info = VSVersionInfo(
             # Clean previous builds
             self.clean_build_dirs()
 
-            # Create dist directory if it doesn't exist
-            os.makedirs(self.dist_dir, exist_ok=True)
+            # Generate spec file
+            spec_file = self.generate_spec_file()
 
             # Run PyInstaller
             logger.info("Building executable...")
-            pyinstaller_args = [
-                '--name=Genie-Secrets',
-                '--windowed',
-                '--onedir',
+            PyInstaller.__main__.run([
                 '--clean',
                 '--noconfirm',
-                f'--distpath={self.dist_dir}',
-                f'--workpath={self.build_dir}',
-                f'--specpath={self.project_root}',
-                f'--icon={self.assets_dir}/logo.png',
-                '--add-data', f'{self.assets_dir};assets',
-                '--add-data', f'{self.hooks_dir};hooks',
-                str(self.main_script)
-            ]
-            
-            import PyInstaller.__main__
-            PyInstaller.__main__.run(pyinstaller_args)
+                str(spec_file)
+            ])
 
             # Get the path to the built executable
-            executable_path = self.dist_dir / "Genie-Secrets" / "Genie-Secrets.exe"
+            executable_path = self.dist_dir / self.app_name / f"{self.app_name}.exe"
 
             if not executable_path.exists():
                 logger.error(f"Build failed: Executable not found at {executable_path}")
@@ -295,11 +269,11 @@ version_info = VSVersionInfo(
 def main():
     try:
         # Create log directory if it doesn't exist
-        log_dir = os.path.expanduser("~/.genie")
+        log_dir = Path(os.path.expanduser("~")) / ".genie"
         os.makedirs(log_dir, exist_ok=True)
 
         # Setup file handler for logging
-        file_handler = logging.FileHandler(os.path.join(log_dir, "genie.log"))
+        file_handler = logging.FileHandler(log_dir / "genie.log")
         file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
         logger.addHandler(file_handler)
 
@@ -317,10 +291,10 @@ def main():
                 from win32com.client import Dispatch
                 
                 desktop = winshell.desktop()
-                shortcut_path = os.path.join(desktop, f"{builder.app_name}.lnk")
+                shortcut_path = Path(desktop) / f"{builder.app_name}.lnk"
                 
                 shell = Dispatch('WScript.Shell')
-                shortcut = shell.CreateShortCut(shortcut_path)
+                shortcut = shell.CreateShortCut(str(shortcut_path))
                 shortcut.Targetpath = str(executable_path)
                 shortcut.WorkingDirectory = str(executable_path.parent)
                 shortcut.IconLocation = str(executable_path)
@@ -336,6 +310,8 @@ def main():
             
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         sys.exit(1)
  
 if __name__ == "__main__":

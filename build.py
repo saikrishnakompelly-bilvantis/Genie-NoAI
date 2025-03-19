@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class Builder:
     def __init__(self):
         self.os_type = platform.system().lower()
-        self.project_root = Path(__file__).parent
+        self.project_root = Path(__file__).resolve().parent
         self.dist_dir = self.project_root / "dist"
         self.build_dir = self.project_root / "build"
         self.src_dir = self.project_root / "src"
@@ -33,17 +33,26 @@ class Builder:
 
     def check_dependencies(self) -> bool:
         """Check if required build dependencies are installed."""
-        try:
-            import PyInstaller
-            return True
-        except ImportError:
-            logger.error("PyInstaller not found. Installing required dependencies...")
+        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow']
+        missing_packages = []
+        
+        for package in required_packages:
             try:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
+                __import__(package.replace('-', '_').split('==')[0])
+            except ImportError:
+                missing_packages.append(package)
+        
+        if missing_packages:
+            logger.error(f"Missing dependencies: {', '.join(missing_packages)}")
+            logger.info("Installing required dependencies...")
+            try:
+                subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing_packages)
                 return True
             except subprocess.CalledProcessError:
                 logger.error("Failed to install dependencies")
                 return False
+        
+        return True
 
     def clean_build_dirs(self):
         """Clean up previous build artifacts."""
@@ -51,28 +60,32 @@ class Builder:
         for dir_path in [self.dist_dir, self.build_dir]:
             if dir_path.exists():
                 shutil.rmtree(dir_path)
+                
+        # Create directories if they don't exist
+        os.makedirs(self.dist_dir, exist_ok=True)
+        os.makedirs(self.build_dir, exist_ok=True)
 
     def collect_data_files(self):
         """Collect all necessary data files."""
         data_files = []
         
         # Add hooks directory with proper relative paths
-        for root, _, files in os.walk(self.hooks_dir):
-            for file in files:
-                full_path = os.path.join(root, file)
-                # Calculate the relative path to maintain directory structure
-                rel_dir = os.path.relpath(root, self.project_root)
-                target_dir = os.path.join('hooks', os.path.relpath(root, self.hooks_dir))
-                data_files.append((full_path, target_dir))
+        if self.hooks_dir.exists():
+            for root, _, files in os.walk(self.hooks_dir):
+                for file in files:
+                    full_path = Path(root) / file
+                    # Calculate the relative path to maintain directory structure
+                    target_dir = Path('hooks') / Path(root).relative_to(self.hooks_dir)
+                    data_files.append((str(full_path), str(target_dir)))
 
         # Add assets directory with proper relative paths
-        for root, _, files in os.walk(self.assets_dir):
-            for file in files:
-                full_path = os.path.join(root, file)
-                # Calculate the relative path to maintain directory structure
-                rel_dir = os.path.relpath(root, self.project_root)
-                target_dir = os.path.join('assets', os.path.relpath(root, self.assets_dir))
-                data_files.append((full_path, target_dir))
+        if self.assets_dir.exists():
+            for root, _, files in os.walk(self.assets_dir):
+                for file in files:
+                    full_path = Path(root) / file
+                    # Calculate the relative path to maintain directory structure
+                    target_dir = Path('assets') / Path(root).relative_to(self.assets_dir)
+                    data_files.append((str(full_path), str(target_dir)))
 
         return data_files
 
@@ -84,6 +97,7 @@ class Builder:
 
 import sys
 import os
+from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 block_cipher = None
@@ -116,8 +130,8 @@ except Exception as e:
     print(f"Warning: Could not collect Qt resources: {{e}}")
 
 a = Analysis(
-    [os.path.join('{self.src_dir}', 'main.py')],
-    pathex=['{self.project_root}'],
+    [str(Path('{self.src_dir}') / 'main.py')],
+    pathex=[str(Path('{self.project_root}'))],
     binaries=[],
     datas=data_files + qt_data_files,
     hiddenimports=[
@@ -126,7 +140,10 @@ a = Analysis(
         'PyQt6.QtWebChannel',
         'PyQt6.QtNetwork',
         'PyQt6.sip',
-        'PyQt6.QtPrintSupport'
+        'PyQt6.QtPrintSupport',
+        'PyQt6.QtWidgets',
+        'PyQt6.QtGui',
+        'PyQt6.QtCore'
     ],
     hookspath=[],
     hooksconfig={{}},
@@ -173,7 +190,7 @@ if sys.platform == 'darwin':
         console=True,  # Set to True temporarily for debugging
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join('{self.assets_dir}', 'logo.png'),
+        icon=str(Path('{self.assets_dir}') / 'logo.png'),
     )
     
     # Create .app bundle for macOS
@@ -183,7 +200,7 @@ if sys.platform == 'darwin':
         a.zipfiles,
         a.datas,
         name='Genie-Secrets.app',
-        icon=os.path.join('{self.assets_dir}', 'logo.png'),
+        icon=str(Path('{self.assets_dir}') / 'logo.png'),
         bundle_identifier='com.genie.secrets',
         info_plist={{
             'CFBundleShortVersionString': '1.0.0',
@@ -221,7 +238,7 @@ else:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        icon=os.path.join('{self.assets_dir}', 'logo.png'),
+        icon=str(Path('{self.assets_dir}') / 'logo.png'),
     )
 """
         spec_file = os.path.join(self.project_root, f"{self.app_name}.spec")
@@ -266,15 +283,30 @@ else:
 
         except Exception as e:
             logger.error(f"Build failed: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
 def main():
-    builder = Builder()
-    executable_path = builder.build()
-    
-    if executable_path:
-        sys.exit(0)
-    else:
+    try:
+        # Create log directory if it doesn't exist
+        log_dir = os.path.expanduser("~/.genie")
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Setup file handler for logging
+        file_handler = logging.FileHandler(os.path.join(log_dir, "genie.log"))
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+        
+        builder = Builder()
+        executable_path = builder.build()
+        
+        if executable_path:
+            sys.exit(0)
+        else:
+            sys.exit(1)
+    except Exception as e:
+        logger.error(f"Fatal error: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":
