@@ -688,15 +688,10 @@ Categories=Utility;Development;
             # Create necessary directories
             os.makedirs(hooks_dir, exist_ok=True)
             
-            # Copy hook files
-            for hook_file in ['pre-commit', 'post-commit', 'scan-repo']:
-                source_file = os.path.join(self.hooks_source, hook_file)
-                target_file = os.path.join(hooks_dir, hook_file)
-                
-                if os.path.exists(source_file):
-                    shutil.copy2(source_file, target_file)
-                    # Make the file executable
-                    os.chmod(target_file, 0o755)
+            # Copy entire hooks folder
+            hooks_source = self.hooks_source
+            if os.path.exists(hooks_source):
+                shutil.copytree(hooks_source, hooks_dir, dirs_exist_ok=True)
             
             # Set up Git configuration
             try:
