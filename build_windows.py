@@ -94,12 +94,24 @@ class WindowsBuilder:
  
     def check_dependencies(self) -> bool:
         """Check if required build dependencies are installed."""
-        required_packages = ['PyInstaller', 'PyQt6', 'PyQt6-WebEngine', 'Pillow', 'pywin32', 'winshell', 'psutil']
+        required_packages = [
+            'PyInstaller',
+            'PySide6',
+            'PySide6-WebEngine',
+            'Pillow',
+            'pywin32',
+            'winshell',
+            'psutil'
+        ]
         missing_packages = []
         
         for package in required_packages:
             try:
-                __import__(package.replace('-', '_').split('==')[0])
+                # Convert package name to import name
+                import_name = package.replace('-', '_').split('==')[0]
+                if import_name == 'PySide6_WebEngine':
+                    import_name = 'PySide6.QtWebEngineWidgets'
+                __import__(import_name)
             except ImportError:
                 missing_packages.append(package)
         
@@ -118,8 +130,8 @@ class WindowsBuilder:
     def get_qt_paths(self):
         """Get Qt installation paths."""
         try:
-            import PyQt6
-            qt_path = os.path.dirname(PyQt6.__file__)
+            import PySide6
+            qt_path = os.path.dirname(PySide6.__file__)
             qt_plugins_path = os.path.join(qt_path, "Qt6", "plugins")
             qt_translations_path = os.path.join(qt_path, "Qt6", "translations")
             qt_resources_path = os.path.join(qt_path, "Qt6", "resources")
@@ -325,15 +337,15 @@ a = Analysis(
     binaries=[],
     datas=data_files,
     hiddenimports=[
-        'PyQt6.QtWebEngineCore',
-        'PyQt6.QtWebEngineWidgets',
-        'PyQt6.QtWebChannel',
-        'PyQt6.QtNetwork',
-        'PyQt6.sip',
-        'PyQt6.QtPrintSupport',
-        'PyQt6.QtWidgets',
-        'PyQt6.QtGui',
-        'PyQt6.QtCore'
+        'PySide6.QtWebEngineCore',
+        'PySide6.QtWebEngineWidgets',
+        'PySide6.QtWebChannel',
+        'PySide6.QtNetwork',
+        'PySide6.shiboken6',
+        'PySide6.QtPrintSupport',
+        'PySide6.QtWidgets',
+        'PySide6.QtGui',
+        'PySide6.QtCore'
     ],
     hookspath=[str(Path(r'{self.hooks_dir}'))],
     hooksconfig={{}},

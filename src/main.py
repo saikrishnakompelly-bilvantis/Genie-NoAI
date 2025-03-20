@@ -3,12 +3,12 @@ import os
 import subprocess
 import webbrowser
 from pathlib import Path
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QMessageBox, 
+from PySide6.QtWidgets import (QApplication, QMainWindow, QMessageBox, 
                             QFileDialog, QSplashScreen, QSizePolicy)
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWebEngineCore import QWebEnginePage
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWebEngineCore import QWebEnginePage
 from datetime import datetime
 from urllib.parse import quote, urljoin
 from urllib.request import pathname2url
