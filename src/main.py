@@ -688,10 +688,32 @@ Categories=Utility;Development;
             # Create necessary directories
             os.makedirs(hooks_dir, exist_ok=True)
             
-            # Copy entire hooks folder
-            hooks_source = self.hooks_source
-            if os.path.exists(hooks_source):
-                shutil.copytree(hooks_source, hooks_dir, dirs_exist_ok=True)
+            # Get the correct hooks source directory
+            if getattr(sys, 'frozen', False):
+                # Running as compiled executable
+                hooks_source = os.path.join(os.path.dirname(sys.executable), 'hooks')
+            else:
+                # Running in development
+                hooks_source = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src', 'hooks')
+            
+            # Copy hook files
+            hook_files = ['pre-commit', 'post-commit', 'scan-repo', 'pre_commit.py', 'post_commit.py', 'scan_repo.py']
+            for hook_file in hook_files:
+                source_file = os.path.join(hooks_source, hook_file)
+                target_file = os.path.join(hooks_dir, hook_file)
+                
+                if os.path.exists(source_file):
+                    shutil.copy2(source_file, target_file)
+                    # Make the file executable
+                    os.chmod(target_file, 0o755)
+                else:
+                    raise FileNotFoundError(f"Hook file not found: {source_file}")
+            
+            # Copy commit_scripts directory if it exists
+            commit_scripts_dir = os.path.join(hooks_source, 'commit_scripts')
+            if os.path.exists(commit_scripts_dir):
+                target_scripts_dir = os.path.join(hooks_dir, 'commit_scripts')
+                shutil.copytree(commit_scripts_dir, target_scripts_dir, dirs_exist_ok=True)
             
             # Set up Git configuration
             try:
@@ -721,191 +743,13 @@ Categories=Utility;Development;
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
                 
-                # Show success message with custom HTML
-                success_html = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <style>
-                        body {{
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-                            margin: 0;
-                            padding: 0;
-                            background: #f5f5f5;
-                            display: flex;
-                            justify-content: center;
-                            align-items: center;
-                            min-height: 100vh;
-                        }}
-                        .success-container {{
-                            background: white;
-                            border-radius: 16px;
-                            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                            padding: 2rem;
-                            max-width: 700px;
-                            width: 90%;
-                        }}
-                        .success-header {{
-                            display: flex;
-                            align-items: center;
-                            margin-bottom: 2rem;
-                            border-bottom: 2px solid #f0f0f0;
-                            padding-bottom: 1rem;
-                        }}
-                        .success-icon {{
-                            background-color: #28a745;
-                            color: white;
-                            width: 50px;
-                            height: 50px;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            border-radius: 50%;
-                            font-size: 24px;
-                            margin-right: 1rem;
-                        }}
-                        .success-title {{
-                            color: #07439C;
-                            font-size: 1.8rem;
-                            margin: 0;
-                        }}
-                        .installation-path {{
-                            background: #f8f9fa;
-                            border-radius: 8px;
-                            padding: 1rem;
-                            font-family: monospace;
-                            margin: 1.5rem 0;
-                            color: #555;
-                            border-left: 4px solid #07439C;
-                        }}
-                        .workflow-section {{
-                            margin-top: 2rem;
-                        }}
-                        .workflow-title {{
-                            color: #07439C;
-                            font-size: 1.3rem;
-                            margin-bottom: 1rem;
-                            display: flex;
-                            align-items: center;
-                        }}
-                        .workflow-title::before {{
-                            content: "🔄";
-                            margin-right: 0.5rem;
-                        }}
-                        .workflow-steps {{
-                            display: grid;
-                            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                            gap: 1rem;
-                            margin-bottom: 2rem;
-                        }}
-                        .workflow-step {{
-                            background: white;
-                            border: 1px solid #e0e0e0;
-                            border-radius: 12px;
-                            padding: 1.2rem;
-                            transition: transform 0.2s, box-shadow 0.2s;
-                            position: relative;
-                            overflow: hidden;
-                        }}
-                        .workflow-step:hover {{
-                            transform: translateY(-5px);
-                            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-                        }}
-                        .step-icon {{
-                            font-size: 1.5rem;
-                            margin-bottom: 0.5rem;
-                            color: #07439C;
-                        }}
-                        .step-title {{
-                            font-weight: 600;
-                            color: #333;
-                            margin-bottom: 0.5rem;
-                        }}
-                        .step-description {{
-                            color: #666;
-                            font-size: 0.9rem;
-                        }}
-                        .button-container {{
-                            display: flex;
-                            justify-content: center;
-                            margin-top: 2rem;
-                        }}
-                        .continue-btn {{
-                            background-color: #07439C;
-                            color: white;
-                            border: none;
-                            border-radius: 8px;
-                            padding: 1rem 2rem;
-                            font-size: 1.1rem;
-                            font-weight: 500;
-                            cursor: pointer;
-                            transition: background-color 0.3s, transform 0.2s;
-                        }}
-                        .continue-btn:hover {{
-                            background-color: #053278;
-                            transform: translateY(-2px);
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <div class="success-container">
-                        <div class="success-header">
-                            <div class="success-icon">✓</div>
-                            <h1 class="success-title">Installation Successful!</h1>
-                        </div>
-                        
-                        <p>Genie has been successfully installed and configured. Your Git hooks are now set up and ready to use.</p>
-                        
-                        <div class="workflow-section">
-                            <h2 class="workflow-title">How Genie Works</h2>
-                            <div class="workflow-steps">
-                                <div class="workflow-step">
-                                    <div class="step-icon">🔍</div>
-                                    <div class="step-title">Secret Scanning</div>
-                                    <div class="step-description">Automatically scans your code for secrets when you commit changes.</div>
-                                </div>
-                                
-                                <div class="workflow-step">
-                                    <div class="step-icon">❓</div>
-                                    <div class="step-title">Justification</div>
-                                    <div class="step-description">Prompts for explanations when potential secrets are detected.</div>
-                                </div>
-                                
-                                <div class="workflow-step">
-                                    <div class="step-icon">📝</div>
-                                    <div class="step-title">Documentation</div>
-                                    <div class="step-description">Adds your justifications to commit messages automatically.</div>
-                                </div>
-                                
-                                <div class="workflow-step">
-                                    <div class="step-icon">📊</div>
-                                    <div class="step-title">Reporting</div>
-                                    <div class="step-description">Generates detailed HTML reports of scan results.</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="button-container">
-                            <button class="continue-btn" onclick="console.log('action:message_ok')">Continue</button>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """
-                self.web_view.setHtml(success_html)
-                
-                # Update message handler to process the callback
-                original_handler = self.web_page.javaScriptConsoleMessage
-                def message_handler(level, msg, line, source):
-                    if msg == 'action:message_ok':
-                        # Set is_first_run to False and load the main UI
-                        self.is_first_run = False
-                        self.load_main_ui()
-                    else:
-                        original_handler(level, msg, line, source)
-                
-                # Apply the custom message handler
-                self.web_page.javaScriptConsoleMessage = message_handler
+                # Show success message
+                self.show_message(
+                    'Installation Successful',
+                    'Genie hooks have been successfully installed and configured.',
+                    'success',
+                    lambda: (setattr(self, 'is_first_run', False), self.load_main_ui())
+                )
                 
             except subprocess.CalledProcessError as e:
                 self.show_message('Error', f'Failed to configure Git hooks: {str(e)}', 'error')
