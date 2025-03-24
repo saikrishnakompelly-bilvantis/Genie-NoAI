@@ -671,7 +671,7 @@ Categories=Utility;Development;
             if platform.system().lower() == 'darwin':
                 base_path = Path(sys._MEIPASS)
             else:
-                base_path = Path(sys.executable).parent
+                base_path = Path(sys._MEIPASS)
             return base_path / 'hooks'
         else:
             # Running in development
@@ -688,17 +688,8 @@ Categories=Utility;Development;
             # Create necessary directories
             os.makedirs(hooks_dir, exist_ok=True)
             
-            # Get the correct hooks source directory
-            if getattr(sys, 'frozen', False):
-                # Running as compiled executable
-                if platform.system().lower() == 'darwin':
-                    base_path = Path(sys._MEIPASS)
-                else:
-                    base_path = Path(sys.executable).parent
-                hooks_source = base_path / 'hooks'
-            else:
-                # Running in development
-                hooks_source = Path(__file__).parent / 'hooks'
+            # Get the correct hooks source directory using get_hooks_path
+            hooks_source = self.get_hooks_path()
             
             # Log paths for debugging
             logging.info(f"Hooks source directory: {hooks_source}")

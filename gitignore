@@ -1,0 +1,7 @@
+/build
+/dist
+.DS_Store
+.venv
+/venv
+/Genie-Secrets.zip
+/Genie-Secrets
