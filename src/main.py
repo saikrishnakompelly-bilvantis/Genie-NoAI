@@ -691,29 +691,42 @@ Categories=Utility;Development;
             # Get the correct hooks source directory
             if getattr(sys, 'frozen', False):
                 # Running as compiled executable
-                hooks_source = os.path.join(os.path.dirname(sys.executable), 'hooks')
+                if platform.system().lower() == 'darwin':
+                    base_path = Path(sys._MEIPASS)
+                else:
+                    base_path = Path(sys.executable).parent
+                hooks_source = base_path / 'hooks'
             else:
                 # Running in development
-                hooks_source = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src', 'hooks')
+                hooks_source = Path(__file__).parent / 'hooks'
+            
+            # Log paths for debugging
+            logging.info(f"Hooks source directory: {hooks_source}")
+            logging.info(f"Hooks target directory: {hooks_dir}")
+            
+            if not hooks_source.exists():
+                raise FileNotFoundError(f"Hooks source directory not found: {hooks_source}")
             
             # Copy hook files
             hook_files = ['pre-commit', 'post-commit', 'scan-repo', 'pre_commit.py', 'post_commit.py', 'scan_repo.py']
             for hook_file in hook_files:
-                source_file = os.path.join(hooks_source, hook_file)
-                target_file = os.path.join(hooks_dir, hook_file)
+                source_file = hooks_source / hook_file
+                target_file = Path(hooks_dir) / hook_file
                 
-                if os.path.exists(source_file):
-                    shutil.copy2(source_file, target_file)
+                if source_file.exists():
+                    shutil.copy2(str(source_file), str(target_file))
                     # Make the file executable
-                    os.chmod(target_file, 0o755)
+                    os.chmod(str(target_file), 0o755)
+                    logging.info(f"Copied hook file: {source_file} -> {target_file}")
                 else:
                     raise FileNotFoundError(f"Hook file not found: {source_file}")
             
             # Copy commit_scripts directory if it exists
-            commit_scripts_dir = os.path.join(hooks_source, 'commit_scripts')
-            if os.path.exists(commit_scripts_dir):
-                target_scripts_dir = os.path.join(hooks_dir, 'commit_scripts')
-                shutil.copytree(commit_scripts_dir, target_scripts_dir, dirs_exist_ok=True)
+            commit_scripts_dir = hooks_source / 'commit_scripts'
+            if commit_scripts_dir.exists():
+                target_scripts_dir = Path(hooks_dir) / 'commit_scripts'
+                shutil.copytree(str(commit_scripts_dir), str(target_scripts_dir), dirs_exist_ok=True)
+                logging.info(f"Copied commit_scripts directory: {commit_scripts_dir} -> {target_scripts_dir}")
             
             # Set up Git configuration
             try:
@@ -756,6 +769,7 @@ Categories=Utility;Development;
                 return
                 
         except Exception as e:
+            logging.error(f"Installation failed: {str(e)}")
             self.show_message('Error', f'Failed to install hooks: {str(e)}', 'error')
             return
 

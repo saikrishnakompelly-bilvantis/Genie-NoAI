@@ -7,10 +7,9 @@ def merge_files(output_file, input_files):
                 f.write(chunk_file.read())
 
 if __name__ == "__main__":
-    output_file = 'path/to/merged.zip'
-    input_files = [
-        'path/to/large.zip.part0',
-        'path/to/large.zip.part1',
-        # Add all parts here
-    ]
+    output_file = r"C:\Users\kesava.kondepudi\Desktop\test\Genie-NoAI\Genie-Secrets.zip"
+    input_files = [r"C:\Users\kesava.kondepudi\Desktop\test\Genie-NoAI\dist\Genie-Secrets.zip.part0",
+r"C:\Users\kesava.kondepudi\Desktop\test\Genie-NoAI\dist\Genie-Secrets.zip.part1",
+r"C:\Users\kesava.kondepudi\Desktop\test\Genie-NoAI\dist\Genie-Secrets.zip.part2",
+r"C:\Users\kesava.kondepudi\Desktop\test\Genie-NoAI\dist\Genie-Secrets.zip.part3"]
     merge_files(output_file, input_files)
