@@ -70,12 +70,82 @@ class CustomWebEnginePage(QWebEnginePage):
                 except Exception as e:
                     pass
 
+# Add this new function to detect restricted environments
+def is_restricted_environment():
+    """Detect if we're running in a restricted HSBC environment."""
+    try:
+        # Check command line arguments
+        if len(sys.argv) > 1 and any(arg in ['--native-ui', '--hsbc'] for arg in sys.argv):
+            return True
+            
+        # Check environment variables
+        if os.environ.get('GENIE_USE_NATIVE_UI', '').lower() in ('1', 'true', 'yes'):
+            return True
+            
+        # Check config file in user's home directory
+        config_file = os.path.join(os.path.expanduser('~'), '.genie_config')
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    content = f.read()
+                    if 'USE_NATIVE_UI=true' in content:
+                        return True
+            except Exception as e:
+                logging.warning(f"Failed to read config file: {e}")
+        
+        # Check for common environment variables that might indicate an HSBC environment
+        hsbc_indicators = ["CORP_", "HSBC", "ENTERPRISE_", "PROXY_REQUIRED"]
+        for env_var in os.environ:
+            if any(indicator in env_var for indicator in hsbc_indicators):
+                return True
+                
+        # Try to load a simple test page to see if QWebEngineView is restricted
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtCore import QUrl, QEventLoop
+        
+        # Skip this test if not in a GUI application
+        if not QApplication.instance():
+            return False
+            
+        test_view = QWebEngineView()
+        test_view.resize(1, 1)  # Minimize size to be invisible
+        
+        # Create an event loop to wait for load
+        loop = QEventLoop()
+        test_view.loadFinished.connect(loop.quit)
+        
+        # Try to load a simple HTML
+        test_view.setHtml("<html><body>Test</body></html>")
+        
+        # Wait with a timeout
+        from PySide6.QtCore import QTimer
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        timer.start(500)  # 500ms timeout
+        
+        loop.exec()
+        
+        # Check if content loaded successfully
+        if test_view.url().isEmpty():
+            return True
+    except Exception as e:
+        # If we got an exception trying to use QWebEngineView, likely in a restricted env
+        logging.warning(f"Exception when testing QWebEngineView: {e}")
+        return True
+        
+    return False
+
 class GenieApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.is_first_run = False
         self.check_first_run()
         self.setup_paths()
+        
+        # Check if we're in a restricted environment
+        self.is_restricted_env = is_restricted_environment()
         
         # Create shortcut on first run
         if self.is_first_run:
@@ -116,14 +186,18 @@ class GenieApp(QMainWindow):
         # Allow window to resize automatically with content
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        # Create web view with custom page
-        self.web_view = QWebEngineView()
-        self.web_page = CustomWebEnginePage(self)
-        self.web_view.setPage(self.web_page)
-        self.setCentralWidget(self.web_view)
-
-        # Load appropriate UI
-        self.load_appropriate_ui()
+        # Create UI based on environment type
+        if self.is_restricted_env:
+            self.create_native_ui()
+        else:
+            # Original web-based UI
+            self.web_view = QWebEngineView()
+            self.web_page = CustomWebEnginePage(self)
+            self.web_view.setPage(self.web_page)
+            self.setCentralWidget(self.web_view)
+            
+            # Load appropriate UI
+            self.load_appropriate_ui()
 
     def create_desktop_shortcut(self):
         """Create desktop shortcut based on the operating system."""
@@ -231,6 +305,14 @@ Categories=Utility;Development;
             os.makedirs(config_dir, exist_ok=True)
 
     def load_appropriate_ui(self):
+        if self.is_restricted_env:
+            # For restricted environments, use appropriate native UI based on first run status
+            if self.is_first_run:
+                self.create_native_welcome_ui()
+            else:
+                self.create_native_main_ui()
+            return
+            
         if self.is_first_run:
             self.load_welcome_ui()
         else:
@@ -721,25 +803,45 @@ Categories=Utility;Development;
             
             # Set up Git configuration
             try:
-                # Remove any existing Git hooks configuration
-                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                             check=False,  # Don't check as it might not exist
-                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                             check=False,  # Don't check as it might not exist
-                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                
-                # Set up new Git hooks configuration
-                subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
-                             check=True,
-                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                
-                # Create git alias for scan-repo with absolute path
-                scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
-                alias_cmd = f'!bash "{scan_repo_path}"'
-                subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
-                             check=True,
-                             creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                # Platform-specific subprocess calls
+                if platform.system().lower() == 'windows':
+                    # Windows-specific code with creationflags
+                    # Remove any existing Git hooks configuration
+                    subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                                check=False,  # Don't check as it might not exist
+                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                    subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                                check=False,  # Don't check as it might not exist
+                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                    
+                    # Set up new Git hooks configuration
+                    subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
+                                check=True,
+                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                    
+                    # Create git alias for scan-repo with absolute path
+                    scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
+                    alias_cmd = f'!bash "{scan_repo_path}"'
+                    subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                                check=True,
+                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                else:
+                    # macOS/Linux code without creationflags
+                    # Remove any existing Git hooks configuration
+                    subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                                check=False)  # Don't check as it might not exist
+                    subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                                check=False)  # Don't check as it might not exist
+                    
+                    # Set up new Git hooks configuration
+                    subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
+                                check=True)
+                    
+                    # Create git alias for scan-repo with absolute path
+                    scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
+                    alias_cmd = f'!bash "{scan_repo_path}"'
+                    subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                                check=True)
                 
                 # Create a config file to store the hooks directory path and installation status
                 config_file = os.path.join(genie_dir, 'config')
@@ -747,33 +849,59 @@ Categories=Utility;Development;
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
                 
-                # Show success message
-                self.show_message(
-                    'Installation Successful',
-                    'Genie hooks have been successfully installed and configured.',
-                    'success',
-                    lambda: (setattr(self, 'is_first_run', False), self.load_main_ui())
-                )
+                # Handle successful installation based on UI mode
+                if self.is_restricted_env:
+                    # For HSBC mode with native UI
+                    self.is_first_run = False
+                    self.create_native_main_ui()
+                    
+                    # Update status
+                    if hasattr(self, 'status_label'):
+                        self.status_label.setText("Hooks installed successfully!")
+                else:
+                    # For standard web-based UI
+                    self.show_message(
+                        'Installation Successful',
+                        'Genie hooks have been successfully installed and configured.',
+                        'success',
+                        lambda: (setattr(self, 'is_first_run', False), self.load_main_ui())
+                    )
                 
             except subprocess.CalledProcessError as e:
-                self.show_message('Error', f'Failed to configure Git hooks: {str(e)}', 'error')
+                if self.is_restricted_env:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.critical(self, "Error", f"Failed to configure Git hooks: {str(e)}")
+                else:
+                    self.show_message('Error', f'Failed to configure Git hooks: {str(e)}', 'error')
                 return
                 
         except Exception as e:
             logging.error(f"Installation failed: {str(e)}")
-            self.show_message('Error', f'Failed to install hooks: {str(e)}', 'error')
+            if self.is_restricted_env:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Error", f"Failed to install hooks: {str(e)}")
+            else:
+                self.show_message('Error', f'Failed to install hooks: {str(e)}', 'error')
             return
 
     def uninstall_hooks(self):
         try:
             # Remove Git configurations first
-            subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                         check=False,  # Don't check as it might not exist
-                         creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-            
-            subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                         check=False,  # Don't check as it might not exist
-                         creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+            if platform.system().lower() == 'windows':
+                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                            check=False,  # Don't check as it might not exist
+                            creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+                
+                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                            check=False,  # Don't check as it might not exist
+                            creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
+            else:
+                # Non-Windows platforms don't have creationflags
+                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                            check=False)  # Don't check as it might not exist
+                
+                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                            check=False)  # Don't check as it might not exist
             
             # Remove .genie directory completely
             genie_dir = os.path.expanduser('~/.genie')
@@ -785,33 +913,340 @@ Categories=Utility;Development;
             if os.path.exists(genie_dir):
                 raise Exception("Failed to remove .genie directory")
                 
-            hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                      capture_output=True, 
-                                      text=True,
-                                      creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
+            if platform.system().lower() == 'windows':
+                hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                        capture_output=True, 
+                                        text=True,
+                                        creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
+                
+                scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                                            capture_output=True, 
+                                            text=True,
+                                            creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
+            else:
+                hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                        capture_output=True, 
+                                        text=True).stdout.strip()
+                
+                scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                                            capture_output=True, 
+                                            text=True).stdout.strip()
+            
             if hooks_path:
                 raise Exception("Git hooks path still set")
                 
-            scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                           capture_output=True, 
-                                           text=True,
-                                           creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
             if scan_repo_alias:
                 raise Exception("Git scan-repo alias still set")
             
-            self.show_message(
-                'Uninstallation Complete',
-                'Genie hooks have been successfully removed.',
-                'success',
-                lambda: (setattr(self, 'is_first_run', True), self.load_welcome_ui())
-            )
+            # Handle success based on UI mode
+            if self.is_restricted_env:
+                # For HSBC mode with native UI
+                self.is_first_run = True
+                self.create_native_welcome_ui()
+                
+                # Update status
+                if hasattr(self, 'status_label'):
+                    self.status_label.setText("Hooks uninstalled successfully!")
+            else:
+                # For standard web-based UI
+                self.show_message(
+                    'Uninstallation Complete',
+                    'Genie hooks have been successfully removed.',
+                    'success',
+                    lambda: (setattr(self, 'is_first_run', True), self.load_welcome_ui())
+                )
             
         except Exception as e:
-            self.show_message(
-                'Uninstallation Failed',
-                f'Unable to remove hooks:\n{str(e)}',
-                'error'
+            if self.is_restricted_env:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Uninstallation Failed", f"Unable to remove hooks:\n{str(e)}")
+            else:
+                self.show_message(
+                    'Uninstallation Failed',
+                    f'Unable to remove hooks:\n{str(e)}',
+                    'error'
+                )
+
+    def create_native_welcome_ui(self):
+        """Create a fallback native UI for HSBC environments - first run welcome screen."""
+        from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, 
+                                    QLabel, QWidget, QTextBrowser, QToolBar, QSizePolicy)
+        
+        # Main container widget
+        container = QWidget()
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(20, 20, 20, 20)  # Reduce margins
+        
+        # Add logo at top
+        if os.path.exists(self.logo_path):
+            logo_label = QLabel()
+            pixmap = QPixmap(self.logo_path)
+            scaled_pixmap = pixmap.scaledToWidth(100)  # Make logo smaller
+            logo_label.setPixmap(scaled_pixmap)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            main_layout.addWidget(logo_label)
+        
+        # Add title
+        title_label = QLabel("Welcome to Genie")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #07439C; margin: 5px;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # Info text
+        info_text = QTextBrowser()
+        info_text.setOpenExternalLinks(True)
+        info_text.setMaximumHeight(150)  # Limit height to reduce space
+        info_text.setHtml("""
+        <div style='margin: 10px;'>
+            <h3>Secret Scanning Tool</h3>
+            <p><strong>Note:</strong> Running in HSBC environment compatibility mode.</p>
+            <p>Genie helps you avoid committing secrets and credentials to your Git repositories.</p>
+            <p>To get started, click the button below to install Genie's Git hooks.</p>
+        </div>
+        """)
+        main_layout.addWidget(info_text)
+        
+        # Action buttons
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 5, 0, 5)  # Reduce margins
+        
+        install_btn = QPushButton("Install Hooks")
+        install_btn.setMinimumHeight(30)  # Smaller buttons
+        install_btn.setStyleSheet("background-color: #07439C; color: white;")
+        install_btn.clicked.connect(self.install_hooks)
+        
+        exit_btn = QPushButton("Exit")
+        exit_btn.setMinimumHeight(30)  # Smaller buttons
+        exit_btn.setStyleSheet("background-color: #6c757d; color: white;")
+        exit_btn.clicked.connect(self.close)
+        
+        button_layout.addWidget(install_btn)
+        button_layout.addWidget(exit_btn)
+        
+        main_layout.addLayout(button_layout)
+        
+        # Status label at bottom
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: gray; font-style: italic;")
+        main_layout.addWidget(self.status_label)
+        
+        # Set the central widget
+        self.setCentralWidget(container)
+        
+        # Set fixed window size to fit content
+        self.setFixedSize(400, 380)  # Compact size
+        self.setMinimumSize(400, 380)  # Ensure minimum size
+
+    def create_native_main_ui(self):
+        """Create a fallback native UI for HSBC environments - main screen after installation."""
+        from PySide6.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, 
+                                    QLabel, QWidget, QTextBrowser, QToolBar, QSizePolicy)
+        
+        # Main container widget
+        container = QWidget()
+        main_layout = QVBoxLayout(container)
+        main_layout.setContentsMargins(20, 20, 20, 20)  # Reduce margins
+        
+        # Add logo at top
+        if os.path.exists(self.logo_path):
+            logo_label = QLabel()
+            pixmap = QPixmap(self.logo_path)
+            scaled_pixmap = pixmap.scaledToWidth(80)  # Make logo smaller
+            logo_label.setPixmap(scaled_pixmap)
+            logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            main_layout.addWidget(logo_label)
+        
+        # Add title
+        title_label = QLabel("Genie - Secret Scanning Tool")
+        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #07439C; margin: 5px;")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+        
+        # Info text
+        info_text = QTextBrowser()
+        info_text.setOpenExternalLinks(True)
+        info_text.setMaximumHeight(200)  # Limit height to reduce space
+        info_text.setHtml("""
+        <div style='margin: 10px;'>
+            <h3>Hooks Installed Successfully</h3>
+            <p><strong>Note:</strong> Running in HSBC environment compatibility mode.</p>
+            <p>Genie is now monitoring your Git commits for secrets and credentials.</p>
+            <h4>How Genie Works:</h4>
+            <ul>
+                <li>Automatically scans code for secrets during commits</li>
+                <li>Prompts for justification when secrets are detected</li>
+                <li>Generates HTML reports of scan results</li>
+                <li>Works with standard Git commands from any terminal</li>
+            </ul>
+        </div>
+        """)
+        main_layout.addWidget(info_text)
+        
+        # Action buttons
+        button_layout = QHBoxLayout()
+        button_layout.setContentsMargins(0, 5, 0, 5)  # Reduce margins
+        
+        uninstall_btn = QPushButton("Uninstall Hooks")
+        uninstall_btn.setMinimumHeight(30)  # Smaller buttons
+        uninstall_btn.setStyleSheet("background-color: #dc3545; color: white;")
+        uninstall_btn.clicked.connect(self.uninstall_hooks)
+        
+        exit_btn = QPushButton("Exit")
+        exit_btn.setMinimumHeight(30)  # Smaller buttons
+        exit_btn.setStyleSheet("background-color: #6c757d; color: white;")
+        exit_btn.clicked.connect(self.close)
+        
+        button_layout.addWidget(uninstall_btn)
+        button_layout.addWidget(exit_btn)
+        
+        main_layout.addLayout(button_layout)
+        
+        # Status label at bottom
+        self.status_label = QLabel("Ready")
+        self.status_label.setStyleSheet("color: gray; font-style: italic;")
+        main_layout.addWidget(self.status_label)
+        
+        # Set the central widget
+        self.setCentralWidget(container)
+        
+        # Set fixed window size to fit content
+        self.setFixedSize(400, 400)  # Compact size
+        self.setMinimumSize(400, 400)  # Ensure minimum size
+
+    def create_native_ui(self):
+        """Select the appropriate native UI based on first run status."""
+        if self.is_first_run:
+            self.create_native_welcome_ui()
+        else:
+            self.create_native_main_ui()
+
+    def select_repo_and_scan(self):
+        """Select a Git repository and scan it for secrets."""
+        try:
+            from PySide6.QtWidgets import QFileDialog, QMessageBox
+            
+            # Show directory selection dialog
+            repo_path = QFileDialog.getExistingDirectory(
+                self,
+                "Select Git Repository",
+                os.path.expanduser("~"),
+                QFileDialog.ShowDirsOnly
             )
+            
+            if not repo_path:
+                # User canceled
+                return
+                
+            # Check if selected directory is a Git repository
+            if not os.path.isdir(os.path.join(repo_path, '.git')):
+                QMessageBox.warning(
+                    self,
+                    "Invalid Repository",
+                    "The selected directory is not a Git repository.\nPlease select a valid Git repository."
+                )
+                return
+                
+            # Update status if using native UI
+            if hasattr(self, 'status_label'):
+                self.status_label.setText("Scanning repository...")
+                self.status_label.repaint()  # Force update
+                
+            # Prepare scan command
+            scan_script = None
+            
+            # Check if we have hooks installed
+            hooks_dir = os.path.expanduser('~/.genie/hooks')
+            if os.path.exists(os.path.join(hooks_dir, 'scan_repo.py')):
+                scan_script = os.path.join(hooks_dir, 'scan_repo.py')
+            else:
+                # Try to find in hooks source
+                if hasattr(self, 'hooks_source'):
+                    scan_script = os.path.join(self.hooks_source, 'scan_repo.py')
+                    
+            if not scan_script or not os.path.exists(scan_script):
+                QMessageBox.critical(
+                    self,
+                    "Scan Failed",
+                    "Could not find scan_repo.py script.\nPlease install hooks first."
+                )
+                return
+                
+            # Create a temporary directory for the report
+            import tempfile
+            report_dir = os.path.join(tempfile.gettempdir(), 'genie_reports')
+            os.makedirs(report_dir, exist_ok=True)
+            
+            # Run the scan
+            original_dir = os.getcwd()
+            try:
+                # Change to the repository directory
+                os.chdir(repo_path)
+                
+                # Execute the scan
+                cmd = [sys.executable, scan_script]
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=False
+                )
+                
+                # Check for errors
+                if result.returncode != 0:
+                    error_msg = result.stderr or "Unknown error occurred during scan."
+                    QMessageBox.critical(self, "Scan Failed", f"Error scanning repository:\n{error_msg}")
+                    return
+                    
+                # Look for the generated report
+                report_path = None
+                for line in result.stdout.split('\n'):
+                    if 'Report saved to:' in line:
+                        report_path = line.split('Report saved to:')[1].strip()
+                        break
+                
+                if not report_path or not os.path.exists(report_path):
+                    # Try to find the latest report in the .commit-reports directory
+                    reports_dir = os.path.join(repo_path, '.git', 'hooks', '.commit-reports')
+                    
+                    if os.path.exists(reports_dir):
+                        # Get the latest report
+                        reports = sorted(
+                            [os.path.join(reports_dir, f) for f in os.listdir(reports_dir) if f.endswith('.html')],
+                            key=os.path.getmtime,
+                            reverse=True
+                        )
+                        
+                        if reports:
+                            report_path = reports[0]
+                
+                # Open the report
+                if report_path and os.path.exists(report_path):
+                    webbrowser.open('file://' + os.path.abspath(report_path))
+                    
+                    # Update status
+                    if hasattr(self, 'status_label'):
+                        self.status_label.setText("Scan complete. Report opened in browser.")
+                else:
+                    # Couldn't find a report - show the raw output
+                    QMessageBox.information(
+                        self,
+                        "Scan Complete",
+                        f"Scan completed but no report was found.\n\nOutput:\n{result.stdout}"
+                    )
+            except Exception as e:
+                QMessageBox.critical(self, "Scan Failed", f"Error scanning repository:\n{str(e)}")
+            finally:
+                # Restore original directory
+                os.chdir(original_dir)
+                
+                # Update status
+                if hasattr(self, 'status_label'):
+                    self.status_label.setText("Ready")
+                    
+        except Exception as e:
+            # Show error
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Failed to scan repository:\n{str(e)}")
 
 if __name__ == '__main__':
     try:
