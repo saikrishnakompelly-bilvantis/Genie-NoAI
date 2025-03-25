@@ -1,26 +1,31 @@
 # -*- mode: python ; coding: utf-8 -*-
 block_cipher = None
-
-a = Analysis(
-    ['src/main.py'],
+a = Analysis(['src/main.py'],
     pathex=[],
     binaries=[],
     datas=[('src/assets', 'assets'), ('src/hooks', 'hooks')],
-    hiddenimports=['PySide6.QtWidgets'],
+    hiddenimports=[
+        'PySide6.QtWidgets',
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWebEngineWidgets',
+        'PySide6.QtWebEngineCore',
+        'PySide6.QtWebEngine',
+        'PySide6.QtWebChannel',
+        'PySide6.QtNetwork',
+        'PySide6.QtPrintSupport'
+    ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
-    excludes=['PySide6.QtWebEngineCore'],
+    runtime_hooks=['runtime_hook.py'],
+    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
-
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
+exe = EXE(pyz,
     a.scripts,
     a.binaries,
     a.zipfiles,

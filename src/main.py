@@ -180,7 +180,7 @@ class GenieApp(QMainWindow):
             self.setWindowIcon(icon)
         
         # Set a smaller initial size and make window resizable
-        self.setGeometry(100, 100, 800, 700)
+        self.setGeometry(200, 200, 1200, 800)
         self.setMinimumSize(650, 500)  # Set minimum size
         
         # Allow window to resize automatically with content
@@ -975,31 +975,30 @@ Categories=Utility;Development;
         # Main container widget
         container = QWidget()
         main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(20, 20, 20, 20)  # Reduce margins
+        main_layout.setContentsMargins(30, 30, 30, 30)  # Increased margins
         
         # Add logo at top
         if os.path.exists(self.logo_path):
             logo_label = QLabel()
             pixmap = QPixmap(self.logo_path)
-            scaled_pixmap = pixmap.scaledToWidth(100)  # Make logo smaller
+            scaled_pixmap = pixmap.scaledToWidth(150)  # Increased logo size
             logo_label.setPixmap(scaled_pixmap)
             logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(logo_label)
         
         # Add title
         title_label = QLabel("Welcome to Genie")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #07439C; margin: 5px;")
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #07439C; margin: 10px;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title_label)
         
         # Info text
         info_text = QTextBrowser()
         info_text.setOpenExternalLinks(True)
-        info_text.setMaximumHeight(150)  # Limit height to reduce space
+        info_text.setMaximumHeight(200)  # Increased height
         info_text.setHtml("""
-        <div style='margin: 10px;'>
+        <div style='margin: 15px;'>
             <h3>Secret Scanning Tool</h3>
-            <p><strong>Note:</strong> Running in HSBC environment compatibility mode.</p>
             <p>Genie helps you avoid committing secrets and credentials to your Git repositories.</p>
             <p>To get started, click the button below to install Genie's Git hooks.</p>
         </div>
@@ -1008,16 +1007,42 @@ Categories=Utility;Development;
         
         # Action buttons
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, 5, 0, 5)  # Reduce margins
+        button_layout.setContentsMargins(0, 10, 0, 10)  # Increased margins
         
         install_btn = QPushButton("Install Hooks")
-        install_btn.setMinimumHeight(30)  # Smaller buttons
-        install_btn.setStyleSheet("background-color: #07439C; color: white;")
+        install_btn.setMinimumHeight(40)  # Increased button height
+        install_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #07439C;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #053278;
+            }
+        """)
         install_btn.clicked.connect(self.install_hooks)
         
         exit_btn = QPushButton("Exit")
-        exit_btn.setMinimumHeight(30)  # Smaller buttons
-        exit_btn.setStyleSheet("background-color: #6c757d; color: white;")
+        exit_btn.setMinimumHeight(40)  # Increased button height
+        exit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
         exit_btn.clicked.connect(self.close)
         
         button_layout.addWidget(install_btn)
@@ -1027,15 +1052,15 @@ Categories=Utility;Development;
         
         # Status label at bottom
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: gray; font-style: italic;")
+        self.status_label.setStyleSheet("color: gray; font-style: italic; font-size: 12px;")
         main_layout.addWidget(self.status_label)
         
         # Set the central widget
         self.setCentralWidget(container)
         
         # Set fixed window size to fit content
-        self.setFixedSize(400, 380)  # Compact size
-        self.setMinimumSize(400, 380)  # Ensure minimum size
+        self.setFixedSize(500, 500)  # Increased window size
+        self.setMinimumSize(500, 500)  # Ensure minimum size
 
     def create_native_main_ui(self):
         """Create a fallback native UI for HSBC environments - main screen after installation."""
@@ -1045,31 +1070,30 @@ Categories=Utility;Development;
         # Main container widget
         container = QWidget()
         main_layout = QVBoxLayout(container)
-        main_layout.setContentsMargins(20, 20, 20, 20)  # Reduce margins
+        main_layout.setContentsMargins(30, 30, 30, 30)  # Increased margins
         
         # Add logo at top
         if os.path.exists(self.logo_path):
             logo_label = QLabel()
             pixmap = QPixmap(self.logo_path)
-            scaled_pixmap = pixmap.scaledToWidth(80)  # Make logo smaller
+            scaled_pixmap = pixmap.scaledToWidth(120)  # Increased logo size
             logo_label.setPixmap(scaled_pixmap)
             logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             main_layout.addWidget(logo_label)
         
         # Add title
         title_label = QLabel("Genie - Secret Scanning Tool")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #07439C; margin: 5px;")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #07439C; margin: 10px;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(title_label)
         
         # Info text
         info_text = QTextBrowser()
         info_text.setOpenExternalLinks(True)
-        info_text.setMaximumHeight(200)  # Limit height to reduce space
+        info_text.setMaximumHeight(250)  # Increased height
         info_text.setHtml("""
-        <div style='margin: 10px;'>
+        <div style='margin: 15px;'>
             <h3>Hooks Installed Successfully</h3>
-            <p><strong>Note:</strong> Running in HSBC environment compatibility mode.</p>
             <p>Genie is now monitoring your Git commits for secrets and credentials.</p>
             <h4>How Genie Works:</h4>
             <ul>
@@ -1084,16 +1108,42 @@ Categories=Utility;Development;
         
         # Action buttons
         button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, 5, 0, 5)  # Reduce margins
+        button_layout.setContentsMargins(0, 10, 0, 10)  # Increased margins
         
         uninstall_btn = QPushButton("Uninstall Hooks")
-        uninstall_btn.setMinimumHeight(30)  # Smaller buttons
-        uninstall_btn.setStyleSheet("background-color: #dc3545; color: white;")
+        uninstall_btn.setMinimumHeight(40)  # Increased button height
+        uninstall_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
         uninstall_btn.clicked.connect(self.uninstall_hooks)
         
         exit_btn = QPushButton("Exit")
-        exit_btn.setMinimumHeight(30)  # Smaller buttons
-        exit_btn.setStyleSheet("background-color: #6c757d; color: white;")
+        exit_btn.setMinimumHeight(40)  # Increased button height
+        exit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
         exit_btn.clicked.connect(self.close)
         
         button_layout.addWidget(uninstall_btn)
@@ -1103,15 +1153,15 @@ Categories=Utility;Development;
         
         # Status label at bottom
         self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("color: gray; font-style: italic;")
+        self.status_label.setStyleSheet("color: gray; font-style: italic; font-size: 12px;")
         main_layout.addWidget(self.status_label)
         
         # Set the central widget
         self.setCentralWidget(container)
         
         # Set fixed window size to fit content
-        self.setFixedSize(400, 400)  # Compact size
-        self.setMinimumSize(400, 400)  # Ensure minimum size
+        self.setFixedSize(500, 550)  # Increased window size
+        self.setMinimumSize(500, 550)  # Ensure minimum size
 
     def create_native_ui(self):
         """Select the appropriate native UI based on first run status."""
