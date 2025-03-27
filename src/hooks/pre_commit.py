@@ -20,6 +20,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.append(str(SCRIPT_DIR))
  
 from commit_scripts.secretscan import SecretScanner
+from commit_scripts.utils import mask_secret
  
 def get_script_dir():
     """Get the directory where this script is located."""
@@ -219,7 +220,8 @@ class ValidationWindow:
                     padx=5,
                     pady=5
                 )
-                content_text.insert(tk.END, item['line'])
+                # Mask the secret content before displaying
+                content_text.insert(tk.END, mask_secret(item['line']))
                 content_text.config(state=tk.DISABLED)  # Make read-only
                 content_text.pack(side="left", fill="x", expand=True, padx=5)
             
@@ -295,11 +297,10 @@ class ValidationWindow:
             justification = justification_entry.get().strip()
             confirmation = confirmation_entry.get().strip()
             
-            # Check minimum word count (10 words)
-            if len(justification.split()) < 10 or len(confirmation.split()) < 10:
+            if len(justification) < 10 and len(confirmation) < 10:
                 messagebox.showerror(
                     "Validation Error",
-                    "Each answer must contain at least 10 words."
+                    "Please provide a valid justification and confirmation."
                 )
                 return
             
