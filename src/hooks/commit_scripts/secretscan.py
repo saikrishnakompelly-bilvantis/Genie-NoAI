@@ -462,7 +462,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         git_metadata = get_git_metadata()
         
         # Generate table rows for diff scan results
-        diff_secrets_table_rows = "".join(
+        diff_secrets_table_rows = ''.join(
             f"""<tr>
                 <td class="sno">{i}</td>
                 <td class="filename">{html.escape(data.get('file_path', ''))}</td>
@@ -473,7 +473,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         ) or "<tr><td colspan='4'>No secrets found in staged changes</td></tr>"
 
         # Generate table rows for repo scan results (including diff secrets)
-        repo_secrets_table_rows = "".join(
+        repo_secrets_table_rows = ''.join(
             f"""<tr>
                 <td class="sno">{i}</td>
                 <td class="filename">{html.escape(data.get('file_path', ''))}</td>
