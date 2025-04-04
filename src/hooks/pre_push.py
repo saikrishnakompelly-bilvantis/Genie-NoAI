@@ -8,39 +8,36 @@ from tkinter import ttk, messagebox
 from pathlib import Path
 import logging
 from typing import List, Dict, Any
+import time
+import webbrowser
  
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
  
-# Add the hooks directory to Python path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.append(str(SCRIPT_DIR))
  
 from commit_scripts.secretscan import SecretScanner
 from commit_scripts.utils import mask_secret
+from commit_scripts.secretscan import generate_html_report
  
 def get_script_dir():
-    """Get the directory where this script is located."""
     return SCRIPT_DIR
  
 def check_python():
-    """Check if Python is available."""
     if sys.version_info[0] < 3:
-        print("WARNING: Python3 is not installed. Secret Scaning functionality will not work.")
+        print("WARNING: Python3 is not installed. Push review functionality will not work.")
         sys.exit(1)
  
 def check_git():
-    """Check if Git is installed and configured."""
     try:
         subprocess.run(['git', '--version'], check=True, capture_output=True)
     except subprocess.CalledProcessError:
         show_message_box("Error: Git is not installed. Please install Git before proceeding.")
         sys.exit(1)
  
-    # Check Git configuration
     try:
         username = subprocess.run(['git', 'config', '--global', 'user.name'],
                                 check=True, capture_output=True, text=True).stdout.strip()
@@ -58,95 +55,242 @@ def check_git():
         sys.exit(1)
  
 def show_message_box(message):
-    """Display a message box using Tkinter."""
     root = tk.Tk()
     root.withdraw()
     messagebox.showinfo("Genie GitHooks", message)
     root.destroy()
  
 def get_user_confirmation(prompt):
-    """Get user confirmation via Tkinter."""
     root = tk.Tk()
     root.withdraw()
     response = messagebox.askyesno("Genie GitHooks", prompt)
     root.destroy()
     return "Y" if response else "N"
  
-def get_files_to_push():
-    """Get list of files that will be pushed."""
+def get_last_pushed_commit():
+    last_pushed_file = SCRIPT_DIR / ".last_pushed_commit"
+    
+    if not last_pushed_file.exists():
+        return None
+        
     try:
-        logging.info("Getting files to be pushed...")
-        # Try to get the names of files changed in commits that will be pushed
-        result = subprocess.run(
-            ['git', 'diff', '--name-only', '@{u}..'], 
+        with open(last_pushed_file, 'r') as f:
+            commit_hash = f.read().strip()
+            if commit_hash:
+                return commit_hash
+    except Exception as e:
+        logging.warning(f"Error reading last pushed commit: {e}")
+    
+    return None
+    
+def save_current_commit_as_pushed():
+    try:
+        head_cmd = ['git', 'rev-parse', 'HEAD']
+        head_result = subprocess.run(
+            head_cmd,
             check=True,
             capture_output=True,
             text=True
         )
-        files = [f for f in result.stdout.strip().split('\n') if f]
+        head_commit = head_result.stdout.strip()
         
-        # If no files are found, default to all tracked files
-        if not files:
+        if not head_commit:
+            logging.warning("Could not get current HEAD commit")
+            return False
+            
+        last_pushed_file = SCRIPT_DIR / ".last_pushed_commit"
+        with open(last_pushed_file, 'w') as f:
+            f.write(head_commit)
+            
+        return True
+    except Exception as e:
+        logging.error(f"Error saving current commit as pushed: {e}")
+        return False
+ 
+def get_pushed_files():
+    try:
+        last_pushed = get_last_pushed_commit()
+        
+        if last_pushed:
+            try:
+                diff_cmd = ['git', 'diff', '--name-only', f'{last_pushed}', 'HEAD']
+                
+                result = subprocess.run(
+                    diff_cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                files = [f for f in result.stdout.strip().split('\n') if f]
+                
+                if files:
+                    return files
+            except subprocess.CalledProcessError as e:
+                logging.warning(f"Error using last pushed reference: {e}")
+        
+        rev_list_cmd = ['git', 'rev-list', '--count', '@{u}..HEAD']
+        try:
+            rev_count_output = subprocess.run(
+                rev_list_cmd, 
+                check=True, 
+                capture_output=True, 
+                text=True
+            ).stdout.strip()
+            
+            rev_count = int(rev_count_output) if rev_count_output.isdigit() else 0
+            
+            if rev_count == 0:
+                return []
+        except subprocess.CalledProcessError:
+            pass
+        
+        try:
+            diff_cmd = ['git', 'diff', '--name-only', '@{u}..HEAD']
             result = subprocess.run(
-                ['git', 'ls-files'],
+                diff_cmd,
                 check=True,
                 capture_output=True,
                 text=True
             )
             files = [f for f in result.stdout.strip().split('\n') if f]
             
-        logging.info(f"Found {len(files)} files to be pushed")
-        return files
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Error getting files to push: {e}")
-        return []
+            if files:
+                return files
+        except subprocess.CalledProcessError:
+            pass
+        
+        try:
+            branch_result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            current_branch = branch_result.stdout.strip()
+            
+            remote_branch_exists = False
+            try:
+                check_remote = subprocess.run(
+                    ['git', 'ls-remote', '--heads', 'origin', current_branch],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                remote_branch_exists = bool(check_remote.stdout.strip())
+            except subprocess.CalledProcessError:
+                remote_branch_exists = False
+            
+            if not remote_branch_exists:
+                commit_count_cmd = ['git', 'rev-list', '--count', 'HEAD']
+                commit_count_result = subprocess.run(
+                    commit_count_cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                commit_count = int(commit_count_result.stdout.strip() or '0')
+                
+                if commit_count == 0:
+                    return []
+                
+                all_files_cmd = ['git', 'ls-files']
+                all_files_result = subprocess.run(
+                    all_files_cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                files = [f for f in all_files_result.stdout.strip().split('\n') if f]
+                return files
+            
+            result = subprocess.run(
+                ['git', 'diff', '--name-only', 'origin/' + current_branch + '..HEAD'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            files = [f for f in result.stdout.strip().split('\n') if f]
+            
+            if files:
+                return files
+        except subprocess.CalledProcessError:
+            try:
+                count_cmd = ['git', 'rev-list', 'HEAD', '--count', '-n', '1']
+                count_result = subprocess.run(
+                    count_cmd,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                commit_count = int(count_result.stdout.strip() or '0')
+                
+                if commit_count == 0:
+                    return []
+                
+                limit = min(10, commit_count)
+                result = subprocess.run(
+                    ['git', 'diff', '--name-only', f'HEAD~{limit}..HEAD'],
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                files = [f for f in result.stdout.strip().split('\n') if f]
+                
+                if files:
+                    return files
+            except subprocess.CalledProcessError:
+                return []
+    except Exception as e:
+        logging.error(f"Unexpected error getting pushed files: {e}")
+    
+    return []
  
-def run_secret_scan():
-    """Run the secret scanning script."""
+def run_secret_scan_on_pushed_files():
     try:
-        logging.info("Initializing secret scanner...")
         scanner = SecretScanner()
+        pushed_files = get_pushed_files()
         
-        logging.info("Getting files to be pushed...")
-        files_to_push = get_files_to_push()
-        
-        logging.info(f"Scanning {len(files_to_push)} files for secrets")
-        results = []
-        
-        for file_path in files_to_push:
-            if os.path.exists(file_path):
-                logging.info(f"Scanning entire file: {file_path}")
-                file_secrets = scanner.scan_file(file_path)
-                if file_secrets:
-                    logging.info(f"Found {len(file_secrets)} secrets in {file_path}")
-                    results.extend(file_secrets)
-        
-        logging.info(f"Found {len(results)} potential secrets")
+        if not pushed_files:
+            return []
+            
+        results = scanner.scan_files(pushed_files)
         return results
     except Exception as e:
         logging.error(f"Secret scan failed: {str(e)}")
         return []
+
+def open_html_report(file_path):
+    try:
+        if not os.path.isfile(file_path):
+            logging.error(f"HTML report file not found at {file_path}")
+            return False
+            
+        abs_path = os.path.abspath(file_path)
+        file_uri = f"file://{abs_path}"
+        
+        time.sleep(0.5)
+        success = webbrowser.open(file_uri)
+        
+        if not success:
+            logging.error("Failed to open browser")
+            
+        return success
+    except Exception as e:
+        logging.error(f"Error opening HTML report: {e}")
+        return False
  
 def create_window(title, width=800, height=600):
-    """Create a centered window."""
     window = tk.Tk()
     window.title(title)
     
-    # Get screen dimensions
     screen_width = window.winfo_screenwidth()
     screen_height = window.winfo_screenheight()
     
-    # Calculate center position
     center_x = int(screen_width/2 - width/2)
     center_y = int(screen_height/2 - height/2)
     
-    # Set window geometry
     window.geometry(f'{width}x{height}+{center_x}+{center_y}')
-    
-    # Make window resizable
     window.resizable(True, True)
-    
-    # Set minimum size
     window.minsize(400, 300)
     
     return window
@@ -157,40 +301,32 @@ class ValidationWindow:
             "secrets": {"proceed": False, "messages": {}, "global_message": ""}
         }
         self.windows = []
-        self.ITEMS_PER_PAGE = 50  # Number of items to show per page
+        self.ITEMS_PER_PAGE = 50
         self.current_page = 1
         self.justification_entries = []
         
     def create_items_list(self, parent: ttk.Frame, items: List[Dict[str, Any]], item_type: str) -> None:
-        """Create a scrollable list of items with their details."""
-        # Create a container frame for the scrollable area
         container_frame = ttk.Frame(parent)
         container_frame.pack(expand=True, fill=tk.BOTH, padx=20)
         
-        # Create canvas and scrollbar - use system default colors
         canvas = tk.Canvas(container_frame, height=350)
         scrollbar = ttk.Scrollbar(container_frame, orient="vertical", command=canvas.yview)
         
-        # Use tk.Frame with system default background
         scrollable_frame = tk.Frame(canvas)
         
-        # Configure scrolling
         scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
         
-        # Create the window in the canvas with proper width
-        # Use the parent's width minus padding for the scrollable frame
-        parent.update_idletasks()  # Force geometry update
-        canvas_width = parent.winfo_width() - 40  # Account for padding
-        if canvas_width <= 0:  # Fallback if parent width not available yet
+        parent.update_idletasks()
+        canvas_width = parent.winfo_width() - 40
+        if canvas_width <= 0:
             canvas_width = 700
         
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw", width=canvas_width)
         canvas.configure(yscrollcommand=scrollbar.set)
         
-        # Add total count label
         count_label = ttk.Label(
             scrollable_frame,
             text=f"Total {item_type}s found: {len(items)}",
@@ -198,12 +334,10 @@ class ValidationWindow:
         )
         count_label.pack(pady=5, padx=10, anchor="w")
         
-        # Create a frame for each item
         for i, item in enumerate(items, 1):
             item_frame = ttk.Frame(scrollable_frame)
             item_frame.pack(fill="x", padx=10, pady=5, anchor="w")
             
-            # File path and line number
             file_info = ttk.Label(
                 item_frame,
                 text=f"File: {item['file_path']}",
@@ -219,7 +353,6 @@ class ValidationWindow:
                 )
                 line_info.pack(anchor="w", fill="x")
             
-            # Content preview
             if 'line' in item:
                 content_frame = ttk.Frame(item_frame)
                 content_frame.pack(fill="x", pady=2, anchor="w")
@@ -231,47 +364,39 @@ class ValidationWindow:
                 )
                 content_label.pack(side="left", anchor="nw")
                 
-                # Use Text widget instead of Label for better wrapping and display
-                # Use a very light gray that works in both light and dark modes
                 content_text = tk.Text(
                     content_frame, 
                     wrap=tk.WORD,
-                    height=2,  # Show 2 lines by default
-                    width=canvas_width-100,  # Allow most of the width
+                    height=2,
+                    width=canvas_width-100,
                     font=('Courier', 10),
                     relief=tk.FLAT,
                     padx=5,
                     pady=5
                 )
-                # Mask the secret content before displaying
                 content_text.insert(tk.END, mask_secret(item['line']))
-                content_text.config(state=tk.DISABLED)  # Make read-only
+                content_text.config(state=tk.DISABLED)
                 content_text.pack(side="left", fill="x", expand=True, padx=5)
             
-            # Add separator
             if i < len(items):
                 ttk.Separator(scrollable_frame, orient="horizontal").pack(
                     fill="x", padx=10, pady=5
                 )
         
-        # Pack canvas and scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Add mouse wheel scrolling
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
 
     def show_questions_dialog(self, parent_window, items):
-        """Show dialog for answering required questions."""
         dialog = tk.Toplevel(parent_window)
         dialog.title("Required Questions")
         dialog.transient(parent_window)
         dialog.grab_set()
         
-        # Calculate size and position
         width = 600
         height = 400
         x = parent_window.winfo_x() + (parent_window.winfo_width() - width) // 2
@@ -281,17 +406,15 @@ class ValidationWindow:
         main_frame = ttk.Frame(dialog, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Instructions
         ttk.Label(
             main_frame,
             text="If you believe the flagged contents are false positives, please mark it as Secret-Scanning-Report-update. "
-                 "To do so, you please answer below questions that will be added to your push metadata:",
+                 "To do so, you please answer below questions that will be added as documentation:",
             wraplength=550,
             justify=tk.LEFT,
             font=('Helvetica', 10)
         ).pack(pady=(0, 20))
         
-        # Question 1
         ttk.Label(
             main_frame,
             text="1. Justification for the deviation from HSBC's policy:",
@@ -302,7 +425,6 @@ class ValidationWindow:
         justification_entry = ttk.Entry(main_frame)
         justification_entry.pack(fill=tk.X, pady=(0, 15))
         
-        # Question 2
         ttk.Label(
             main_frame,
             text="2. Confirmation that all the findings are validated and confirmed to be not adding the credentials/secrets in code:",
@@ -313,7 +435,6 @@ class ValidationWindow:
         confirmation_entry = ttk.Entry(main_frame)
         confirmation_entry.pack(fill=tk.X, pady=(0, 15))
         
-        # Result variable to store the answers
         result = {"proceed": False, "justification": "", "confirmation": ""}
         
         def validate_and_proceed():
@@ -336,11 +457,9 @@ class ValidationWindow:
             result["proceed"] = False
             dialog.quit()
         
-        # Buttons frame at the bottom
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
         
-        # Center-align buttons using a nested frame
         center_frame = ttk.Frame(button_frame)
         center_frame.pack(anchor=tk.CENTER)
         
@@ -365,21 +484,17 @@ class ValidationWindow:
         return result
 
     def show_validation_window(self, title, items, item_type):
-        """Show validation window for either secrets or disallowed files."""
         if not items:
             return True
             
-        # Reset pagination for new window
         self.current_page = 1
         
-        root = create_window(title, width=900, height=700)  # Larger default window
+        root = create_window(title, width=900, height=700)
         self.windows.append(root)
         
-        # Create main container with padding
         main_container = ttk.Frame(root, padding="20")
         main_container.pack(fill=tk.BOTH, expand=True)
         
-        # Header with warning at the top
         warning_frame = ttk.Frame(main_container)
         warning_frame.pack(fill=tk.X, pady=(0, 20))
         
@@ -394,7 +509,7 @@ class ValidationWindow:
                        "\n"
                      "Should you decide to proceed, please proceed by clicking on \"Proceed\" button below. "
                      "Once you click on Proceed, you will be required to answer a few questions before continuing with the push. "
-                     "Please provide your responses in place of the following details in your push comments. "
+                     "Please provide your responses in place of the following details. "
                      "These responses will be recorded in the MOD2 Catalyst dashboard.\n\n"
                      "Click \"Proceed\" to continue.")
         policy_label = ttk.Label(
@@ -405,28 +520,22 @@ class ValidationWindow:
         )
         policy_label.pack(pady=(0, 10))
         
-        # Create content frame for the scrollable area - make it take more space
         content_frame = ttk.Frame(main_container)
         content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
         
-        # Create items list in the content frame
         self.create_items_list(content_frame, items, item_type)
         
-        # Create button frame at the bottom
         button_frame = ttk.Frame(main_container)
         button_frame.pack(fill=tk.X, pady=(0, 10))
         
-        # Center-align buttons
         button_container = ttk.Frame(button_frame)
         button_container.pack(anchor=tk.CENTER)
         
         def on_proceed():
-            # Show questions dialog
             result = self.show_questions_dialog(root, items)
             if not result["proceed"]:
                 return
             
-            # Store results with answers
             self.results["secrets"] = {
                 "proceed": True,
                 "messages": {
@@ -442,22 +551,20 @@ class ValidationWindow:
             self.results["secrets"] = {"proceed": False, "messages": {}, "global_message": ""}
             root.quit()
         
-        # Create larger buttons
         ttk.Button(
             button_container, 
             text="Abort Push", 
             command=on_abort,
-            padding=(20, 10)  # Wider buttons
+            padding=(20, 10)
         ).pack(side=tk.LEFT, padx=20)
         
         ttk.Button(
             button_container, 
             text="Proceed", 
             command=on_proceed,
-            padding=(20, 10)  # Wider buttons
+            padding=(20, 10)
         ).pack(side=tk.LEFT, padx=20)
         
-        # Handle window close button (X)
         def on_window_close():
             on_abort()
             root.destroy()
@@ -465,7 +572,6 @@ class ValidationWindow:
         root.protocol("WM_DELETE_WINDOW", on_window_close)
         root.mainloop()
         
-        # Clean up the window
         if root in self.windows:
             self.windows.remove(root)
         root.destroy()
@@ -473,7 +579,6 @@ class ValidationWindow:
         return self.results["secrets"]["proceed"]
  
     def show_abort_window(self):
-        """Show the abort window."""
         root = create_window("Push Aborted - Genie GitHooks", width=400, height=200)
         
         main_frame = ttk.Frame(root, padding="20")
@@ -509,8 +614,6 @@ class ValidationWindow:
         root.wait_window()
  
     def run_validation(self, secrets_data):
-        """Run the validation process for secrets."""
-        # Reset results at the start of validation
         self.results = {
             "secrets": {"proceed": False, "messages": {}, "global_message": ""}
         }
@@ -528,7 +631,6 @@ class ValidationWindow:
         return True
  
 def save_metadata(validation_results, secrets_data):
-    """Save push metadata for post-push hook."""
     script_dir = get_script_dir()
     metadata_file = script_dir / ".push_metadata.json"
     
@@ -543,41 +645,117 @@ def save_metadata(validation_results, secrets_data):
  
     except Exception as e:
         print(f"Warning: Failed to save metadata: {str(e)}", file=sys.stderr)
- 
-def append_validation_messages():
-    """Process validation messages for the push."""
+
+def record_push_information(validation_results):
+    if not validation_results:
+        return False
+    
+    messages = []
+    result_data = validation_results.get("secrets", {})
+    type_messages = result_data.get("messages", {})
+    global_message = result_data.get("global_message", "")
+    
+    reviewed_items = [item for item, data in type_messages.items()
+                    if data.get("classification") == "reviewed"]
+    
+    if reviewed_items and global_message:
+        items_list = ", ".join(reviewed_items)
+        messages.append(f"[SECRETS] {items_list}: {global_message}")
+    
+    if not messages:
+        return False
+    
     try:
-        script_dir = get_script_dir()
-        metadata_file = script_dir / ".push_metadata.json"
+        log_file = Path(get_script_dir()) / "push_validations.log"
         
-        if not metadata_file.exists():
-            return
-            
-        with open(metadata_file, 'r', encoding='utf-8') as f:
-            metadata = json.load(f)
-            
-        validation_results = metadata.get("validation_results", {})
+        with open(log_file, 'a') as f:
+            f.write(f"\n--- Push validation: {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            f.write("\n".join(messages) + "\n")
         
-        # Collect messages for secrets
-        messages = []
-        result_data = validation_results.get("secrets", {})
-        type_messages = result_data.get("messages", {})
-        global_message = result_data.get("global_message", "")
+        return True
         
-        # If there are any reviewed items and a global message
-        reviewed_items = [item for item, data in type_messages.items()
-                        if data.get("classification") == "reviewed"]
-        
-        if reviewed_items and global_message:
-            items_list = ", ".join(reviewed_items)
-            messages.append(f"[SECRETS] {items_list}: {global_message}")
-        
-        # For push, we can't modify commit messages, so we just log the messages
-        if messages:
-            logging.info("Validation messages: " + "\n".join(messages))
-                
     except Exception as e:
-        print(f"Warning: Failed to process validation messages: {str(e)}", file=sys.stderr)
+        logging.error(f"Error recording push information: {e}")
+        return False
+
+def generate_and_open_report(secrets_found):
+    try:
+        reports_dir = SCRIPT_DIR / ".push-reports"
+        reports_dir.mkdir(exist_ok=True)
+        
+        scanner = SecretScanner()
+        
+        repo_secrets = scanner.scan_repository()
+        
+        all_secrets = []
+        if secrets_found:
+            all_secrets.extend(secrets_found)
+        if repo_secrets:
+            all_secrets.extend(repo_secrets)
+        
+        output_path = reports_dir / "scan-report.html"
+        
+        # First generate the report using the standard function
+        success = generate_html_report(
+            str(output_path),
+            diff_secrets=secrets_found,
+            repo_secrets=all_secrets,
+            has_secrets=bool(all_secrets)
+        )
+        
+        if not success:
+            logging.error("HTML report generation failed")
+            return False
+            
+        # Now add our custom table styling to fix column widths
+        try:
+            with open(output_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+                
+            # CSS to fix table layout and prevent expanding based on content
+            fixed_table_css = """
+            <style>
+                table { 
+                    width: 100% !important; 
+                    table-layout: fixed !important;
+                }
+                th, td { 
+                    word-wrap: break-word !important;
+                    overflow-wrap: break-word !important;
+                    max-width: 100% !important;
+                }
+                th:nth-child(1), td:nth-child(1) { width: 5% !important; }
+                th:nth-child(2), td:nth-child(2) { width: 25% !important; }
+                th:nth-child(3), td:nth-child(3) { width: 10% !important; }
+                th:nth-child(4), td:nth-child(4) { 
+                    width: 60% !important;
+                    white-space: pre-wrap !important;
+                }
+            </style>
+            """
+            
+            # Insert our custom CSS after the existing styles
+            if "</style>" in html_content:
+                html_content = html_content.replace("</style>", "}</style>\n" + fixed_table_css)
+            else:
+                # If no style tag found, add it after the title
+                html_content = html_content.replace("</title>", "</title>\n" + fixed_table_css)
+            
+            # Write the modified content back
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+                
+            logging.info("Added fixed table styling to HTML report")
+        except Exception as e:
+            logging.warning(f"Failed to add custom table styling: {e}")
+            # Continue anyway since the basic report was generated
+        
+        open_html_report(str(output_path))
+        
+        return True
+    except Exception as e:
+        logging.error(f"Error generating HTML report: {e}", exc_info=True)
+        return False
  
 def main():
     try:
@@ -585,23 +763,44 @@ def main():
         check_python()
         check_git()
         
-        logging.info("Running secret scan...")
-        secrets_data = run_secret_scan()
+        try:
+            status_cmd = ['git', 'status', '-sb']
+            status_output = subprocess.run(
+                status_cmd,
+                check=True,
+                capture_output=True,
+                text=True
+            ).stdout.strip()
+            
+            if "up to date" in status_output.lower() and "ahead" not in status_output:
+                logging.info("Pre-push hook completed - nothing to scan")
+                sys.exit(0)
+        except Exception as e:
+            logging.warning(f"Error checking git status: {e}")
+        
+        pushed_files = get_pushed_files()
+        if not pushed_files:
+            logging.info("Pre-push hook completed successfully (nothing to push)")
+            sys.exit(0)
+        
+        secrets_data = run_secret_scan_on_pushed_files()
+        
+        validation_results = {}
         
         if secrets_data:
-            logging.info("Showing validation window...")
             validation = ValidationWindow()
             if not validation.run_validation(secrets_data):
-                logging.info("Validation failed or was aborted")
                 sys.exit(1)
             
-            logging.info("Saving metadata...")
+            validation_results = validation.results
             save_metadata(validation.results, secrets_data)
-            logging.info("Appending validation messages...")
-            append_validation_messages()
+            record_push_information(validation_results)
         else:
-            logging.info("No issues found, saving empty metadata")
             save_metadata({}, [])
+        
+        generate_and_open_report(secrets_data)
+        
+        save_current_commit_as_pushed()
         
         logging.info("Pre-push hook completed successfully")
             

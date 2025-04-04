@@ -263,6 +263,37 @@ class SecretScanner:
             self.logger.error(f"Unexpected error during scan of files to be pushed: {e}", exc_info=True)
             return []
 
+    def scan_files(self, files_list: List[str]) -> List[Dict[str, Any]]:
+        """Scan a list of specific files for secrets."""
+        try:
+            if not files_list:
+                self.logger.info("No files provided to scan.")
+                return []
+            
+            # Scan all files in the provided list
+            self.logger.info(f"Scanning {len(files_list)} specified files for secrets")
+            
+            # Reset found secrets list before starting scan
+            self.found_secrets = []
+            
+            # Scan each file in its entirety
+            for file_path in files_list:
+                if os.path.exists(file_path):
+                    self.logger.info(f"Scanning file: {file_path}")
+                    file_secrets = self.scan_file(file_path)
+                    if file_secrets:
+                        self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                        self.found_secrets.extend(file_secrets)
+                else:
+                    self.logger.warning(f"File does not exist: {file_path}")
+            
+            self.logger.info(f"Found {len(self.found_secrets)} potential secrets in specified files")
+            return self.found_secrets
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error during scan of specified files: {e}", exc_info=True)
+            return []
+
     def scan_line(self, file_path: str, line_number: int, line: str) -> None:
         """Scan a single line for secrets."""
         # Check if we've already found a secret at this file:line
