@@ -29,7 +29,7 @@ def get_script_dir():
 def check_python():
     """Check if Python is available."""
     if sys.version_info[0] < 3:
-        print("WARNING: Python3 is not installed. Push review functionality will not work.")
+        print("WARNING: Python3 is not installed. Secret Scaning functionality will not work.")
         sys.exit(1)
  
 def check_git():
@@ -71,23 +71,22 @@ def get_user_confirmation(prompt):
     response = messagebox.askyesno("Genie GitHooks", prompt)
     root.destroy()
     return "Y" if response else "N"
-
+ 
 def get_files_to_push():
-    """Get list of files about to be pushed."""
+    """Get list of files that will be pushed."""
     try:
         logging.info("Getting files to be pushed...")
-        # Get the files that have been changed in commits that will be pushed
+        # Try to get the names of files changed in commits that will be pushed
         result = subprocess.run(
-            ['git', 'diff', '--name-only', '@{u}..'],
+            ['git', 'diff', '--name-only', '@{u}..'], 
             check=True,
             capture_output=True,
             text=True
         )
         files = [f for f in result.stdout.strip().split('\n') if f]
         
-        # If no files found from the above command (maybe first push), get all tracked files
+        # If no files are found, default to all tracked files
         if not files:
-            logging.info("No upstream found, checking all staged and committed files")
             result = subprocess.run(
                 ['git', 'ls-files'],
                 check=True,
@@ -108,11 +107,19 @@ def run_secret_scan():
         logging.info("Initializing secret scanner...")
         scanner = SecretScanner()
         
-        # Get the files to be pushed
+        logging.info("Getting files to be pushed...")
         files_to_push = get_files_to_push()
         
-        logging.info("Scanning files to be pushed...")
-        results = scanner.scan_files_to_push(files_to_push)
+        logging.info(f"Scanning {len(files_to_push)} files for secrets")
+        results = []
+        
+        for file_path in files_to_push:
+            if os.path.exists(file_path):
+                logging.info(f"Scanning entire file: {file_path}")
+                file_secrets = scanner.scan_file(file_path)
+                if file_secrets:
+                    logging.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                    results.extend(file_secrets)
         
         logging.info(f"Found {len(results)} potential secrets")
         return results
@@ -278,7 +285,7 @@ class ValidationWindow:
         ttk.Label(
             main_frame,
             text="If you believe the flagged contents are false positives, please mark it as Secret-Scanning-Report-update. "
-                 "To do so, you please answer below questions that will be added to your push message:",
+                 "To do so, you please answer below questions that will be added to your push metadata:",
             wraplength=550,
             justify=tk.LEFT,
             font=('Helvetica', 10)
@@ -519,25 +526,26 @@ class ValidationWindow:
                 return False
  
         return True
-
+ 
 def save_metadata(validation_results, secrets_data):
-    """Save metadata for post-push processing."""
+    """Save push metadata for post-push hook."""
+    script_dir = get_script_dir()
+    metadata_file = script_dir / ".push_metadata.json"
+    
     try:
         metadata = {
             "validation_results": validation_results,
             "secrets_found": secrets_data
         }
         
-        metadata_file = Path(get_script_dir()) / ".push_metadata.json"
         with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=2)
-        
-        logging.info(f"Metadata saved to {metadata_file}")
+            json.dump(metadata, f, indent=2)
+ 
     except Exception as e:
-        logging.error(f"Error saving metadata: {e}")
-
+        print(f"Warning: Failed to save metadata: {str(e)}", file=sys.stderr)
+ 
 def append_validation_messages():
-    """Append validation messages if needed."""
+    """Process validation messages for the push."""
     try:
         script_dir = get_script_dir()
         metadata_file = script_dir / ".push_metadata.json"
@@ -556,31 +564,26 @@ def append_validation_messages():
         type_messages = result_data.get("messages", {})
         global_message = result_data.get("global_message", "")
         
-        # If there are any true positives and a global message
-        true_positives = [item for item, data in type_messages.items()
-                        if data.get("classification") == "true_positive"]
+        # If there are any reviewed items and a global message
+        reviewed_items = [item for item, data in type_messages.items()
+                        if data.get("classification") == "reviewed"]
         
-        if true_positives and global_message:
-            items_list = ", ".join(true_positives)
+        if reviewed_items and global_message:
+            items_list = ", ".join(reviewed_items)
             messages.append(f"[SECRETS] {items_list}: {global_message}")
         
-        # For push hooks, no need to modify commit message
-        # This function is mostly a placeholder for compatibility
-            
+        # For push, we can't modify commit messages, so we just log the messages
+        if messages:
+            logging.info("Validation messages: " + "\n".join(messages))
+                
     except Exception as e:
         print(f"Warning: Failed to process validation messages: {str(e)}", file=sys.stderr)
-
+ 
 def main():
     try:
         logging.info("Starting pre-push hook")
         check_python()
         check_git()
-        
-        files_to_push = get_files_to_push()
-        if not files_to_push:
-            logging.info("No files to push")
-            show_message_box("No files to push.")
-            sys.exit(0)
         
         logging.info("Running secret scan...")
         secrets_data = run_secret_scan()
@@ -606,6 +609,6 @@ def main():
         logging.error(f"Error in pre-push hook: {str(e)}", exc_info=True)
         print(f"Error: {str(e)}", file=sys.stderr)
         sys.exit(1)
-
+ 
 if __name__ == "__main__":
-    main() 
+    main()

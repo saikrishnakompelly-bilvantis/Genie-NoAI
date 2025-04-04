@@ -73,7 +73,7 @@ def main():
         # Get the hooks directory
         hooks_dir = get_script_dir()
         
-        # Define paths - use push-specific paths
+        # Define paths
         metadata_file = hooks_dir / ".push_metadata.json"
         reports_dir = hooks_dir / ".push-reports"
                 
@@ -296,4 +296,4 @@ def main():
             MARKER_FILE.unlink()
 
 if __name__ == '__main__':
-    main() 
+    main()
