@@ -521,51 +521,132 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
     diff_secrets_table_rows = generate_table_rows(diff_secrets)
     repo_secrets_table_rows = generate_table_rows(repo_secrets)
     
-    # Create a very simple HTML without CSS that might interfere with string formatting
+    # Create HTML template with tab buttons and styling
     html_content = """<!DOCTYPE html>
 <html>
 <head>
     <title>Secret Scan Report</title>
     <style>
-        body {{ font-family: sans-serif; margin: 20px; }}
+        body {{ font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f8f9fa; }}
+        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
         h1, h2 {{ color: #0056b3; }}
-        table {{ width: 100%; border-collapse: collapse; }}
-        th, td {{ padding: 8px; text-align: left; border: 1px solid #ddd; }}
+        .header-info {{ background: #f1f8ff; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #0056b3; }}
+        .header-info p {{ margin: 5px 0; color: #666; }}
+        .header-info strong {{ color: #333; margin-right: 5px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        th, td {{ padding: 12px; text-align: left; border: 1px solid #ddd; }}
         th {{ background: #0056b3; color: white; }}
+        tr:nth-child(even) {{ background-color: #f5f5f5; }}
+        .secret-content {{ color: #d32f2f; font-family: monospace; white-space: pre-wrap; }}
+        .tab-container {{ margin-top: 20px; }}
+        .tab-buttons {{ display: flex; gap: 10px; margin-bottom: 20px; }}
+        .tab-button {{ padding: 10px 20px; background-color: #f0f0f0; border: none; border-radius: 5px; cursor: pointer; }}
+        .tab-button.active {{ background-color: #0056b3; color: white; }}
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+        .actions {{ display: flex; justify-content: space-between; align-items: center; margin: 20px 0; }}
+        .btn {{ 
+            background-color: #0056b3; 
+            color: white; 
+            border: none; 
+            padding: 10px 20px; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+        }}
+        .btn:hover {{ background-color: #004494; }}
+        .icon {{ margin-right: 8px; }}
     </style>
 </head>
 <body>
-    <h1>Secret Scan Report</h1>
-    
-    <div>
-        <p><strong>Git Author:</strong> {author}</p>
-        <p><strong>Repository:</strong> {repo_name}</p>
-        <p><strong>Branch:</strong> {branch}</p>
-        <p><strong>Commit Hash:</strong> {commit_hash}</p>
-        <p><strong>Timestamp:</strong> {timestamp}</p>
+    <div class="container">
+        <div class="actions">
+            <h1>Secret Scan Report</h1>
+            <button onclick="window.print()" class="btn">
+                <span class="icon">📥</span> Save as PDF
+            </button>
+        </div>
+        
+        <div class="header-info">
+            <p><strong>Git Author:</strong> {author}</p>
+            <p><strong>Repository:</strong> {repo_name}</p>
+            <p><strong>Branch:</strong> {branch}</p>
+            <p><strong>Commit Hash:</strong> {commit_hash}</p>
+            <p><strong>Timestamp:</strong> {timestamp}</p>
+        </div>
+
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="showTab('diff-scan')">Push Scan Results</button>
+                <button class="tab-button" onclick="showTab('repo-scan')">Repository Scan Results</button>
+            </div>
+
+            <div id="diff-scan" class="tab-content active">
+                <h2>Files to be Pushed - Secrets Found: {diff_secrets_count}</h2>
+                <table>
+                    <tr>
+                        <th style="width:5%">S.No</th>
+                        <th style="width:25%">Filename</th>
+                        <th style="width:10%">Line #</th>
+                        <th style="width:60%">Secret</th>
+                    </tr>
+                    {diff_secrets_rows}
+                </table>
+            </div>
+
+            <div id="repo-scan" class="tab-content">
+                <h2>Repository Scan - Secrets Found: {repo_secrets_count}</h2>
+                <table>
+                    <tr>
+                        <th style="width:5%">S.No</th>
+                        <th style="width:25%">Filename</th>
+                        <th style="width:10%">Line #</th>
+                        <th style="width:60%">Secret</th>
+                    </tr>
+                    {repo_secrets_rows}
+                </table>
+            </div>
+        </div>
     </div>
-
-    <h2>Files to be Pushed - Secrets Found: {diff_secrets_count}</h2>
-    <table>
-        <tr>
-            <th style="width:5%">S.No</th>
-            <th style="width:25%">Filename</th>
-            <th style="width:10%">Line #</th>
-            <th style="width:60%">Secret</th>
-        </tr>
-        {diff_secrets_rows}
-    </table>
-
-    <h2>Repository Scan - Secrets Found: {repo_secrets_count}</h2>
-    <table>
-        <tr>
-            <th style="width:5%">S.No</th>
-            <th style="width:25%">Filename</th>
-            <th style="width:10%">Line #</th>
-            <th style="width:60%">Secret</th>
-        </tr>
-        {repo_secrets_rows}
-    </table>
+    
+    <script>
+        function showTab(tabId) {{
+            // Hide all tab contents
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(tab => tab.classList.remove('active'));
+            
+            // Remove active class from all buttons
+            const tabButtons = document.querySelectorAll('.tab-button');
+            tabButtons.forEach(button => button.classList.remove('active'));
+            
+            // Show the selected tab
+            document.getElementById(tabId).classList.add('active');
+            
+            // Add active class to the clicked button
+            event.target.classList.add('active');
+        }}
+        
+        // Print setup - show both tabs when printing
+        window.onbeforeprint = function() {{
+            document.querySelectorAll('.tab-content').forEach(tab => {{
+                tab.style.display = 'block';
+            }});
+        }};
+        
+        window.onafterprint = function() {{
+            // Restore tab visibility after printing
+            document.querySelectorAll('.tab-content').forEach(tab => {{
+                if (tab.classList.contains('active')) {{
+                    tab.style.display = 'block';
+                }} else {{
+                    tab.style.display = 'none';
+                }}
+            }});
+        }};
+    </script>
 </body>
 </html>"""
 
