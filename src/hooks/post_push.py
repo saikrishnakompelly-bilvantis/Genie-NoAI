@@ -129,7 +129,7 @@ def main():
         diff_secrets = unique_diff_secrets
         
         # Generate HTML report with both scan results
-        output_path = reports_dir / f"push-scan-report-{time.strftime('%Y%m%d-%H%M%S')}.html"
+        output_path = reports_dir / "scan-report.html"
         logging.info(f"Generating HTML report at {output_path}")
         
         try:
@@ -276,12 +276,13 @@ def main():
             logging.error(f"Warning: Failed to remove metadata file: {e}")
         
         # Open the report in browser if secrets were found and report was generated
-        if success:
-            # Always open the report in browser, even if no secrets were found
+        if success and (diff_secrets or repo_secrets):
             logging.info("Opening HTML report in browser")
             open_html_report(str(output_path))
-        else:
+        elif not success:
             logging.warning("HTML report generation failed, not opening browser")
+        else:
+            logging.info("No secrets found, HTML report generated but not opened")
         
         logging.info("Post-push hook completed successfully")
         
