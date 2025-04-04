@@ -284,8 +284,6 @@ class SecretScanner:
                     if file_secrets:
                         self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
                         self.found_secrets.extend(file_secrets)
-                else:
-                    self.logger.warning(f"File does not exist: {file_path}")
             
             self.logger.info(f"Found {len(self.found_secrets)} potential secrets in specified files")
             return self.found_secrets
