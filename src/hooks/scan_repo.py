@@ -98,7 +98,7 @@ def scan_repository():
 def main():
     try:
         # Create reports directory if it doesn't exist
-        reports_dir = SCRIPT_DIR / ".commit-reports"
+        reports_dir = SCRIPT_DIR / ".push-reports"
         reports_dir.mkdir(exist_ok=True)
         
         # Get all files and check for disallowed files

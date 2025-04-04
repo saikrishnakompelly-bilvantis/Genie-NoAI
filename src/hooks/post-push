@@ -8,16 +8,16 @@ SCRIPT_DIR=$(echo "$SCRIPT_DIR" | sed 's/\\/\//g')
 
 # Make the Python script executable (Unix-like systems only)
 if [ "$(uname)" != "MINGW"* ] && [ "$(uname)" != "MSYS"* ]; then
-    chmod +x "$SCRIPT_DIR/pre_commit.py"
+    chmod +x "$SCRIPT_DIR/post_push.py"
 fi
 
 # Run the Python script using python3 or python, whichever is available
 if command -v python3 >/dev/null 2>&1; then
-    python3 "$SCRIPT_DIR/pre_commit.py"
+    python3 "$SCRIPT_DIR/post_push.py"
 else
-    python "$SCRIPT_DIR/pre_commit.py"
+    python "$SCRIPT_DIR/post_push.py"
 fi
 exit_code=$?
 
 # Exit with the same code as the Python script
-exit $exit_code
+exit $exit_code 
