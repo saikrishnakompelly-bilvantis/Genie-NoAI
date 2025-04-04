@@ -1,77 +1,83 @@
 #!/usr/bin/env python3
-"""Test file with dummy secrets to test the pre-push hook."""
+"""Test file containing various dummy secrets for testing secret scanning functionality."""
 
-# API Keys (these are fake but should trigger detection)
-API_KEY = "sk_live_51LzUQHK8tQhPM6TyumgmeyV8cZ"
-STRIPE_SECRET_KEY = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
-AWS_API_KEY = "AKIAIOSFODNN7EXAMPLE"
-
-# Hard-coded API keys with very obvious patterns
-api_key = "api_key=1234567890abcdefghijklmnopqrstuvwxyz"
-API_KEY_VAR = "api_key=MzIyMzM0M2IzODIABCDEFGHIJKLMNYZ"
-secret_key = "secret_key=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+# API Keys
+api_key = "AIzaSyDz7drSCB-xylInKA4xGLg4A1UZbmfcZkM"
+aws_secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
 # Database credentials
-DB_PASSWORD = "super_secure_password123!"
-DATABASE_CONNECTION = "postgresql://admin:verystrongpassword@localhost:5432/database"
-# Very obvious database connection string
-jdbc_connection = "jdbc:postgresql://username:password123@hostname:5432/database"
+DB_USERNAME = "admin"
+DB_PASSWORD = "super_secure_password123"
 
-# OAuth and access tokens
-GITHUB_TOKEN = "ghp_kBHjU8LoNSQK6ugMvp7jSavHhXsZG40jzzmM"
-OAUTH_TOKEN = "ya29.a0AfB_byAK1qr4xVXM-OmII_W9nkQh9sdJ7TLcpyoNs"
+# OAuth tokens
+OAUTH_TOKEN = "gho_16C7e42F292c6912E7710c838347Ae178B4a"
+OAUTH_CLIENT_SECRET = "6adb231e5c9b6fcd378169a8d44f8b132159bc99"
+REFRESH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
 
-# Very explicit password assignments
-password = "password=supersecretpassword123"
-pwd = "pwd=anothersecretpassword456"
-PASSWORD_VAR = "password=p@$$w0rd!!!"
+# Private keys
+PRIVATE_KEY = """-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEAxzYuc1RV+rcbAHmlJv6GcA8M+/NzZp0qQAGh7M12Bqokwu+9
+OuLxhCGXyDYKBywDQgBsna5H1QDyms4hL3aYRqKXA+tF9iYJJ4H9ayDCNHQCUQHU
+ykSICOZj5iNjRaKE1ptUH9iXDPgYlRoR1l3h02CQXX0hL6ZzgfIz2qqK1J5x8iGm
+km+IpUbvl17M+CR+w8yj7Jah9WF2qdtRQmQj1PjfPAT1aq8ew7l4qEqVKoVUelyI
+HX/dCJRMO4ky5p7g3XAgl8pP+2gqnbEfKCZJ3+XCiOlQtA1GGFe/HOmfAMihGxon
+z+OUhA3l+P1i0/fxTLOGlqN10ZIpPdz7FBtH6wIDAQABAoIBAQC5OMjrrF/Iixxt
+X0SdUdXLFEqmjwzfwNkWp0ueLgWDFpGgbhUxpBl+EQmbB6g/b8T6Lf5o2gPNGrfN
+sxmPfTtUXMVuGHT6hqKP3FP9Ll228bGdlLd7CbMZ5N0/xqw9mHcjOwKCYGV0Rh5E
+3nVGJUkKdVXUlA8JnkHGVQxzHwqQdxme7OFM1XPkDvnkf+lSZVUDIqA6IQKALOrx
+SVfhGEv8cUzJAIgNjqCxGXL51I39lJRSEsl9Mr+B2V673iPFiAcJCXwTnFXwBBWk
+lmM34J+MsTgPevz5W65mTGTKIQB6PELV8LIZVQkPNLLnwlCpZaPGHPgV/C+Wl1iy
+oOGYHHKBAoGBAP3bX7fbIzk7p0jmNq7wGWJXLCpgyNM/I9Zl6YJG2nDYYr9K2FUb
+rcym65LF7UOLn3RU7Z2XVG+aEhfG7JFzWQUVINHMh9jNmM3MPYZ124zf+Vj7Qk6o
+gg+Z8YJHUePjJmrhU+4jpCdGlm/n6g0BdVJxm9+5vAJGkfyxGWvGXw7bAoGBAMjQ
+tIzJQzw7+ZwYhRYQXjCwM0YRs9Hy5JH5QgHrrRr1pLOtCFRp9g7b+l8WzQZNRbsu
+MbQArj5BmNxfTHNn9CXNr/r0SmhZdTH+VoD1ZiMm+gH6M+lXyJ6WWbLLYsZpRsQu
+DfS5GVoQCOiKKvWVYWxT81yjdcC8h3DBpJa7EQJBAoGBAN999TjqQioDGnrS/8Ht
+DBNBxnlk9aZpSQWY0JqS5Fk7WhCvRsQY3bxkIKXxCHKwTW6vdBOVltoWSXyiAlPE
+FZYwNsmUXYXY7ECQgedsvKS5Rj1gCcve3TcdfDHfuiPX0/G1s1iVB4l2LAOwPP5M
+hOhS7JnmKpf+uOLxWDJl7ZhvAoGAb9zCIMuJQqfKEGJ7c841YG9QLjmiLKYUocBK
+9PUWzHeSir1nFpIxQIP+F5QNfYf8ial9YEYs5jLySYQX48+JZk/23IqdQbLQ8aoD
+rGJIgJXIUbqxVH2E6MdLtoA5OYL5YPrZ/NjUQe4uZGNcXmm27MRZXQe/XrLHzfdG
+GRRYzEECgYA7CnEJp8mhAQTqX/EsMXkMGYJ2RmKhQXsJcJXRDyfElEgzADTChY51
+c0vWPSA6RF8vPm8b6Q7sJbLJFVmV/K7jLfLhBpIXz+3kNJtP+MOH2XuJl/Jr/EPF
+m5UtCLlHPMqYfeO96o/+5UffRTlkPQvBdg+jHOf4+BVhLcGcLiBBQQ==
+-----END RSA PRIVATE KEY-----"""
 
-# Private key (this is a fake one)
-PRIVATE_KEY = """
------BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAxzYuc1RV+rcbAHmlJv6GcA8hPQQhHvQAYPnrGcwwPFOVKUJA
-hvUKicS5ZBvpk+kfL5NzjWNUw+NFnbPZ/F7ykgVx3Ps3QJUQwt5OCaAM4H+kYF0d
-djQQK5GL3+t4Q7ej2yQe+jkDUjWdvmWGnAi/0nCoq/wjcL7mxpSm7H56jd1vjiQu
-8IF1ni7JGP8MZ4xtU3/yoK1hGvl3uY+dYa3pyXj5S/9tPgDd5JF2lXLKY7BnTXda
-gSxJE+wl1ET8tLT+zk2K8cPRUTm9/wOYJJCj0+6Ld5PGTz9/qZ0QKrnG7GZqUGTK
-KuA7NBnNTEBsF2lGizTcm5+0o5qYeULrV4K6XQIDAQABAoIBAQDG0DpkTTnPiQbO
-q5lQkLQJPcCCLmRmVNWbDQZuKjZzRwlEfW1ImSYkFhyKVX8YfFSQn+T3W/dUWwlM
-TXwNwPbLH0uJ+/0kd9o8BAICvUh7XsLy/RXlDnzQFLe3F9UJbdF/tNt0zc6vFILO
-VGbv/JVeKIAWuGHXNMGrCcRHYLmPHgYRL32KPsbgM3iYmRWU0QkSUzZEaSkLKF3B
-k0zGE2+KUWDlDPhc9TvE07lLJwtYbDjBUwTHCAtgRjPQ/k4aJQ3MbVG8KfSN3Tyl
-4zJrr32QXnRV+Lmty6j0TXWZx7xO7IJaKvt8UE1oWQIwOHt2i71g4MXAxY4+v7Hv
-5zHu7QjBAoGBAOZOKNS2KHh3my9GFgEZUQvO5gPz1XhdWtwb+DHO7A51oQpwtYXZ
-bDxrYkYjYTvMCTnFbMbGQ9owVYm6cKJJN8vGm3AcwHjqYUCQmAFmZPMcx/EAqK8R
-V7W5W+crGLaWTKFLpydaqCJO4YH7o7+rGPLu3ARLR8l9vJ+XPrpIAXutAoGBAN2Y
-u0WWSHg9EYKnbYUjjYZAl+Ve8W5XS3mXZ7m5QBj9D+cA8xby8SD1ak7gxNKwT6Kc
-vgaf3NyILUlDrPqWGo3P8nKg4mihsVNF5a8Ch4RV2IRRF2a+5JpiBEHQdR5+dHYK
-KWWKQQXDECnWbIMv/hZaFtXtXK6xjfzPlQoGfODhAoGAW+41S1oFvxLkrgOJHNbj
-Lv6MjDQN5qvvA1MgpKy9uGXsUi/TbbA8YqHb9WdgsSNXkWz+wJHxlJO+Qs0h7sK7
-lXaW3K7c+g+WJrRDb+RhCZ0xOKMZrDX1cWXreLMB3RDM0JgfJUMzGYR2jcMjXRdl
-XZ4dVY2E+QVdVE/O+/F1zIECgYEAylLfwJvnUUPjR1Gb9ki+TOXoQnhqnz1BMN6m
-pHpZwAMOsTcZQ4nwcbTEVHMXlDTnWzs5QEjljzbpHIgrm5y9+VKcyK5s/LC8nFnc
-G68zFypv7XRDJr/QYjY3fXMJ2B6fOQg6yI5L8qbbYMDjVpMNJKD+ZGmHjQVL06QO
-/t0sHiECgYBQkfSxQjGk0JcVc483nx6yrWN9ZBDrm2+4y5cjRqhY3HBP/+QUerIX
-dYnzRF+K/aOS0FbMk0Kyz8DXzXLjuDpR+IP8e2ozjwLQxfwST3M3ZaOdFtDvVw3S
-aWvYbCbG7JqjMEkO3nBycMHNMV8gPQ9HaPfwOcpIKbX5H1NUZ2RiLQ==
------END RSA PRIVATE KEY-----
-"""
+# Credit card numbers
+TEST_CC_VISA = "4111 1111 1111 1111"
+TEST_CC_AMEX = "3714 496353 98431"
+
+# Simple authentication examples
+username = "root"
+password = "password123"
+
+def connect_to_api():
+    """Simulate connecting to an API with the secret key."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    return headers
+
+def connect_to_database():
+    """Simulate connecting to a database."""
+    connection_string = f"mysql://{DB_USERNAME}:{DB_PASSWORD}@localhost:3306/testdb"
+    return connection_string
 
 # JWT token
-JWT_SECRET = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+jwt_token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
 
-# Environment variable with secret
-SUPER_SECRET_KEY = "abcdef1234567890ABCDEF1234567890"
-# Example of export syntax in a command
-# export SUPER_SECRET_KEY="abcdef1234567890ABCDEF1234567890"
-
-# This shouldn't trigger detection (regular variable)
-regular_variable = "This is just a normal string"
-
-def main():
-    """Print some of the secrets (for testing purposes only)."""
-    print(f"API Key: {API_KEY[:5]}...")
-    print(f"Database Password: {DB_PASSWORD[:5]}...")
+class SecretManager:
+    """Class that manages various secrets."""
     
+    def __init__(self):
+        self.github_token = "github_pat_11AAJX5KI0BL9eQ8p2b2_I"
+        self.encryption_key = "c29tZXJhbmRvbWVuY3J5cHRpb25rZXk="
+    
+    def get_aws_credentials(self):
+        """Return AWS credentials."""
+        return {
+            "access_key": "AKIAIOSFODNN7EXAMPLE",
+            "secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        }
+
 if __name__ == "__main__":
-    main() 
+    print("This file contains various dummy secrets for testing purposes only.")
+    print("DO NOT use any of these credentials in production environments!") 

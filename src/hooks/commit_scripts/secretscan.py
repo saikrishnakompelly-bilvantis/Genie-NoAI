@@ -200,81 +200,67 @@ class SecretScanner:
         
         return self.found_secrets
     
-    def scan_staged_changes(self) -> List[Dict[str, Any]]:
-        """Scan staged changes for secrets, focusing only on changed lines."""
+    def scan_file(self, file_path: str) -> List[Dict[str, Union[str, int]]]:
+        """Scan a single file for secrets."""
         try:
-            # Get list of staged files
-            cmd = ['git', 'diff', '--cached', '--name-only']
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            staged_files = result.stdout.strip().split('\n')
-            staged_files = [f for f in staged_files if f]  # Remove empty strings
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return self.scan_content(content, file_path=file_path)
+        except Exception as e:
+            logging.error(f"Error scanning file {file_path}: {e}")
+            return []
+
+    def scan_files_to_push(self, files_list=None) -> List[Dict[str, Any]]:
+        """Scan files that will be pushed for secrets."""
+        try:
+            # Get list of files to be pushed if not provided
+            files_to_push = files_list or []
             
-            if not staged_files:
-                self.logger.info("No staged files found.")
-                return []
+            if not files_to_push:
+                # Get list of files to be pushed
+                cmd = ['git', 'diff', '--cached', '--name-only']
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                files_to_push = result.stdout.strip().split('\n')
+                files_to_push = [f for f in files_to_push if f]  # Remove empty strings
                 
-            # Get the diff with line numbers for each staged file
-            self.logger.info(f"Scanning {len(staged_files)} staged files for secrets")
-            
-            # Get the detailed diff information
-            diff_cmd = ['git', 'diff', '--cached', '-p', '--unified=0', '--no-color']
-            diff_output = subprocess.check_output(diff_cmd, text=True)
-            
-            # Parse the diff to extract changed lines with correct line numbers
-            changed_lines = {}  # Dict to store {file_path: {line_number: content}}
-            current_file = None
-            
-            for line in diff_output.splitlines():
-                # New file being processed
-                if line.startswith('diff --git'):
-                    file_path = line.split()[-1].lstrip('b/')
-                    current_file = file_path
-                    changed_lines[current_file] = {}
-                
-                # Hunk header with line numbers
-                elif line.startswith('@@ '):
-                    # Format: "@@ -old_start,old_count +new_start,new_count @@"
-                    hunk_info = line.split(' ')[2]  # gets "+new_start,new_count"
-                    
+                if not files_to_push:
+                    # Try getting files that have changed between local and upstream
                     try:
-                        # Extract the starting line number from "+line_num,count"
-                        new_start = int(hunk_info.split(',')[0].lstrip('+'))
-                        self.logger.debug(f"Hunk starts at line {new_start} in {current_file}")
-                    except (IndexError, ValueError) as e:
-                        self.logger.error(f"Error parsing hunk header '{line}': {e}")
-                        continue
-                    
-                    # Store current position in this hunk
-                    current_line_number = new_start - 1  # Prepare for increment
-                
-                # Added or modified line (not the file header line)
-                elif current_file and line.startswith('+') and not line.startswith('+++'):
-                    current_line_number += 1
-                    content = line[1:]  # Remove the '+' prefix
-                    
-                    # Store the changed line with its actual line number in the file
-                    changed_lines[current_file][current_line_number] = content
-                    self.logger.debug(f"Added line {current_line_number} from {current_file} for scanning")
+                        cmd = ['git', 'diff', '--name-only', '@{u}..']
+                        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                        files_to_push = result.stdout.strip().split('\n')
+                        files_to_push = [f for f in files_to_push if f]
+                    except subprocess.CalledProcessError:
+                        # No upstream branch or other issue, fallback to all tracked files
+                        pass
+                        
+                    if not files_to_push:
+                        self.logger.info("No files to push found.")
+                        return []
             
-            # Now scan all changed lines with their correct line numbers
-            for file_path, lines in changed_lines.items():
-                for line_number, content in lines.items():
-                    # Skip empty lines and comments
-                    if not content.strip() or content.strip().startswith(('#', '//', '/*', '*')):
-                        continue
-                    
-                    # Scan this individual line with its correct line number
-                    self.logger.debug(f"Scanning line {line_number} in {file_path}")
-                    self.scan_line(file_path, line_number, content)
+            # Scan all files that will be pushed
+            self.logger.info(f"Scanning {len(files_to_push)} files for secrets")
             
-            self.logger.info(f"Found {len(self.found_secrets)} potential secrets in staged changes")
+            # Reset found secrets list before starting scan
+            self.found_secrets = []
+            
+            # Scan each file in its entirety
+            for file_path in files_to_push:
+                if os.path.exists(file_path):
+                    self.logger.info(f"Scanning entire file: {file_path}")
+                    file_secrets = self.scan_file(file_path)
+                    if file_secrets:
+                        self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                        self.found_secrets.extend(file_secrets)
+            
+            self.logger.info(f"Found {len(self.found_secrets)} potential secrets in files to be pushed")
             return self.found_secrets
             
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Error running git command: {e}")
             return []
         except Exception as e:
-            self.logger.error(f"Unexpected error during staged changes scan: {e}", exc_info=True)
+            self.logger.error(f"Unexpected error during scan of files to be pushed: {e}", exc_info=True)
             return []
 
     def scan_line(self, file_path: str, line_number: int, line: str) -> None:
@@ -381,16 +367,6 @@ class SecretScanner:
                     self.logger.info(f"Found potential secret in variable '{var_name}' in {file_path}:{line_number}")
                     return  # Once we find a secret, no need to check other patterns
 
-    def scan_file(self, file_path: str) -> List[Dict[str, Union[str, int]]]:
-        """Scan a single file for secrets."""
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return self.scan_content(content, file_path=file_path)
-        except Exception as e:
-            logging.error(f"Error scanning file {file_path}: {e}")
-            return []
-
     def scan_repository(self) -> List[Dict[str, Union[str, int]]]:
         """Scan the entire Git repository for secrets."""
         all_results = []
@@ -462,26 +438,10 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         git_metadata = get_git_metadata()
         
         # Generate table rows for diff scan results
-        diff_secrets_table_rows = ''.join(
-            f"""<tr>
-                <td class="sno">{i}</td>
-                <td class="filename">{html.escape(data.get('file_path', ''))}</td>
-                <td class="line-number">{data.get('line_number', '')}</td>
-                <td class="secret"><div class="secret-content">{html.escape(mask_secret(data.get('line', '')))}</div></td>
-            </tr>"""
-            for i, data in enumerate(diff_secrets, 1)
-        ) or "<tr><td colspan='4'>No secrets found in staged changes</td></tr>"
+        diff_secrets_table_rows = generate_table_rows(diff_secrets)
 
         # Generate table rows for repo scan results (including diff secrets)
-        repo_secrets_table_rows = ''.join(
-            f"""<tr>
-                <td class="sno">{i}</td>
-                <td class="filename">{html.escape(data.get('file_path', ''))}</td>
-                <td class="line-number">{data.get('line_number', '')}</td>
-                <td class="secret"><div class="secret-content">{html.escape(mask_secret(data.get('line', '')))}</div></td>
-            </tr>"""
-            for i, data in enumerate(all_secrets_for_repo_view, 1)
-        ) or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"
+        repo_secrets_table_rows = generate_table_rows(all_secrets_for_repo_view)
         
         # Empty disallowed files section
         disallowed_files_section = ""
@@ -618,12 +578,12 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
 
         <div class="tab-container">
             <div class="tab-buttons">
-                <button class="tab-button active" id="diffBtn">Diff Scan Results</button>
+                <button class="tab-button active" id="diffBtn">Push Scan Results</button>
                 <button class="tab-button" id="repoBtn">Repository Scan Results</button>
             </div>
 
             <div id="diff-scan" class="tab-content active">
-                <h2>Staged Changes - Secrets Found: {len(diff_secrets)}</h2>
+                <h2>Files to be Pushed - Secrets Found: {len(diff_secrets)}</h2>
                 <table>
                     <tr>
                         <th style="width:5%">S.No</th>
@@ -631,12 +591,7 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
                         <th style="width:10%">Line #</th>
                         <th style="width:60%">Secret</th>
                     </tr>
-                    {''.join(f"""<tr>
-                        <td>{i}</td>
-                        <td>{html.escape(s.get('file_path', ''))}</td>
-                        <td>{s.get('line_number', '')}</td>
-                        <td><div class="secret-content">{html.escape(mask_secret(s.get('line', '')))}</div></td>
-                    </tr>""" for i, s in enumerate(diff_secrets, 1)) or "<tr><td colspan='4'>No secrets found in staged changes</td></tr>"}
+                    {diff_secrets_table_rows or "<tr><td colspan='4'>No secrets found in files to be pushed</td></tr>"}
                 </table>
             </div>
 
@@ -649,12 +604,7 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
                         <th style="width:10%">Line #</th>
                         <th style="width:60%">Secret</th>
                     </tr>
-                    {''.join(f"""<tr>
-                        <td>{i}</td>
-                        <td>{html.escape(s.get('file_path', ''))}</td>
-                        <td>{s.get('line_number', '')}</td>
-                        <td><div class="secret-content">{html.escape(mask_secret(s.get('line', '')))}</div></td>
-                    </tr>""" for i, s in enumerate(repo_secrets, 1)) or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"}
+                    {repo_secrets_table_rows or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"}
                 </table>
             </div>
         </div>
@@ -692,21 +642,34 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
 </body>
 </html>"""
 
+def generate_table_rows(secrets):
+    """Generate HTML table rows for secrets."""
+    rows = []
+    for i, s in enumerate(secrets, 1):
+        row = "<tr>"
+        row += f"<td>{i}</td>"
+        row += f"<td>{html.escape(s.get('file_path', ''))}</td>"
+        row += f"<td>{s.get('line_number', '')}</td>"
+        row += f"<td><div class=\"secret-content\">{html.escape(mask_secret(s.get('line', '')))}</div></td>"
+        row += "</tr>"
+        rows.append(row)
+    return ''.join(rows) if rows else ""
+
 def main() -> None:
     """Main entry point for the secret scanner."""
     args = sys.argv[1:]
     scanner = SecretScanner()
 
     if "--diff" in args:
-        logging.info("Scanning only staged changes...")
+        logging.info("Scanning only files to be pushed...")
         try:
-            results = scanner.scan_staged_changes()
+            results = scanner.scan_files_to_push()
             if results:
-                print("Potential secrets found in staged changes:")
+                print("Potential secrets found in files to be pushed:")
                 for result in results:
                     print(f"- {result['file_path']}:{result['line_number']}")
         except Exception as e:
-            logging.error(f"Error scanning staged changes: {e}")
+            logging.error(f"Error scanning files to be pushed: {e}")
             sys.exit(1)
     else:
         logging.info("Scanning entire repository...")
