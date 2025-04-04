@@ -195,19 +195,19 @@ def main():
         
         <div class="tab-container">
             <div class="tab-buttons">
-                <button class="tab-button active" id="diffBtn">Files to be Pushed</button>
+                <button class="tab-button active" id="diffBtn">Staged Changes</button>
                 <button class="tab-button" id="repoBtn">Repository Scan</button>
             </div>
             
             <div id="diff-scan" class="tab-content active">
-                <h2>Files to be Pushed - Secrets Found: {len(diff_secrets)}</h2>
+                <h2>Staged Changes - Secrets Found: {len(diff_secrets)}</h2>
                 <table>
                     <tr>
                         <th>File</th>
                         <th>Line</th>
                         <th>Content</th>
                     </tr>
-                    {''.join(f"<tr><td>{s.get('file_path', '')}</td><td>{s.get('line_number', '')}</td><td><pre>{s.get('line', '')}</pre></td></tr>" for s in diff_secrets) or "<tr><td colspan='3'>No secrets found in files to be pushed</td></tr>"}
+                    {''.join(f"<tr><td>{s.get('file_path', '')}</td><td>{s.get('line_number', '')}</td><td><pre>{s.get('line', '')}</pre></td></tr>" for s in diff_secrets) or "<tr><td colspan='3'>No secrets found in staged changes</td></tr>"}
                 </table>
             </div>
             
