@@ -517,130 +517,72 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
         'timestamp': html.escape(git_metadata.get('timestamp', 'Unknown'))
     }
     
-    # Generate a timestamp for the filename
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Generate table rows for diff secrets and repo secrets
+    diff_secrets_table_rows = generate_table_rows(diff_secrets)
+    repo_secrets_table_rows = generate_table_rows(repo_secrets)
     
-    return f"""<!DOCTYPE html>
+    # Create a very simple HTML without CSS that might interfere with string formatting
+    html_content = """<!DOCTYPE html>
 <html>
 <head>
     <title>Secret Scan Report</title>
     <style>
-        body {{ font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f8f9fa; }}
-        .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        body {{ font-family: sans-serif; margin: 20px; }}
         h1, h2 {{ color: #0056b3; }}
-        .header-info {{ background: #f1f8ff; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #0056b3; }}
-        .header-info p {{ margin: 5px 0; color: #666; }}
-        .header-info strong {{ color: #333; margin-right: 5px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-        th, td {{ padding: 12px; text-align: left; border: 1px solid #ddd; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ padding: 8px; text-align: left; border: 1px solid #ddd; }}
         th {{ background: #0056b3; color: white; }}
-        tr:nth-child(even) {{ background-color: #f5f5f5; }}
-        .secret-content {{ color: #d32f2f; font-family: monospace; white-space: pre-wrap; }}
-        .tab-container {{ margin-top: 20px; }}
-        .tab-buttons {{ display: flex; gap: 10px; margin-bottom: 20px; }}
-        .tab-button {{ padding: 10px 20px; background-color: #f0f0f0; border: none; border-radius: 5px; cursor: pointer; }}
-        .tab-button.active {{ background-color: #0056b3; color: white; }}
-        .tab-content {{ display: none; }}
-        .tab-content.active {{ display: block; }}
-        .actions {{ display: flex; justify-content: space-between; align-items: center; margin: 20px 0; }}
-        .btn {{ 
-            background-color: #0056b3; 
-            color: white; 
-            border: none; 
-            padding: 10px 20px; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-        }}
-        .btn:hover {{ background-color: #004494; }}
-        .icon {{ margin-right: 8px; }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="actions">
-            <h1>Secret Scan Report</h1>
-            <button onclick="window.print()" class="btn">
-                <span class="icon">📥</span> Save as PDF
-            </button>
-        </div>
-        
-        <div class="header-info">
-            <p><strong>Git Author:</strong> {safe_metadata['author']}</p>
-            <p><strong>Repository:</strong> {safe_metadata['repo_name']}</p>
-            <p><strong>Branch:</strong> {safe_metadata['branch']}</p>
-            <p><strong>Commit Hash:</strong> {safe_metadata['commit_hash']}</p>
-            <p><strong>Timestamp:</strong> {safe_metadata['timestamp']}</p>
-        </div>
-
-        <div class="tab-container">
-            <div class="tab-buttons">
-                <button class="tab-button active" id="diffBtn">Push Scan Results</button>
-                <button class="tab-button" id="repoBtn">Repository Scan Results</button>
-            </div>
-
-            <div id="diff-scan" class="tab-content active">
-                <h2>Files to be Pushed - Secrets Found: {len(diff_secrets)}</h2>
-                <table>
-                    <tr>
-                        <th style="width:5%">S.No</th>
-                        <th style="width:25%">Filename</th>
-                        <th style="width:10%">Line #</th>
-                        <th style="width:60%">Secret</th>
-                    </tr>
-                    {diff_secrets_table_rows or "<tr><td colspan='4'>No secrets found in files to be pushed</td></tr>"}
-                </table>
-            </div>
-
-            <div id="repo-scan" class="tab-content">
-                <h2>Repository Scan - Secrets Found: {len(repo_secrets)}</h2>
-                <table>
-                    <tr>
-                        <th style="width:5%">S.No</th>
-                        <th style="width:25%">Filename</th>
-                        <th style="width:10%">Line #</th>
-                        <th style="width:60%">Secret</th>
-                    </tr>
-                    {repo_secrets_table_rows or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"}
-                </table>
-            </div>
-        </div>
+    <h1>Secret Scan Report</h1>
+    
+    <div>
+        <p><strong>Git Author:</strong> {author}</p>
+        <p><strong>Repository:</strong> {repo_name}</p>
+        <p><strong>Branch:</strong> {branch}</p>
+        <p><strong>Commit Hash:</strong> {commit_hash}</p>
+        <p><strong>Timestamp:</strong> {timestamp}</p>
     </div>
 
-    <script>
-    // Simple tab switching
-    document.getElementById('diffBtn').addEventListener('click', function() {{
-        document.getElementById('diff-scan').classList.add('active');
-        document.getElementById('repo-scan').classList.remove('active');
-        document.getElementById('diffBtn').classList.add('active');
-        document.getElementById('repoBtn').classList.remove('active');
-    }});
-    
-    document.getElementById('repoBtn').addEventListener('click', function() {{
-        document.getElementById('repo-scan').classList.add('active');
-        document.getElementById('diff-scan').classList.remove('active');
-        document.getElementById('repoBtn').classList.add('active');
-        document.getElementById('diffBtn').classList.remove('active');
-    }});
-    
-    // Print setup - show both tabs when printing
-    window.onbeforeprint = function() {{
-        // Show both tabs for printing
-        document.getElementById('diff-scan').style.display = 'block';
-        document.getElementById('repo-scan').style.display = 'block';
-    }};
-    
-    window.onafterprint = function() {{
-        // Restore tab visibility after printing
-        document.getElementById('diff-scan').style.display = document.getElementById('diffBtn').classList.contains('active') ? 'block' : 'none';
-        document.getElementById('repo-scan').style.display = document.getElementById('repoBtn').classList.contains('active') ? 'block' : 'none';
-    }};
-    </script>
+    <h2>Files to be Pushed - Secrets Found: {diff_secrets_count}</h2>
+    <table>
+        <tr>
+            <th style="width:5%">S.No</th>
+            <th style="width:25%">Filename</th>
+            <th style="width:10%">Line #</th>
+            <th style="width:60%">Secret</th>
+        </tr>
+        {diff_secrets_rows}
+    </table>
+
+    <h2>Repository Scan - Secrets Found: {repo_secrets_count}</h2>
+    <table>
+        <tr>
+            <th style="width:5%">S.No</th>
+            <th style="width:25%">Filename</th>
+            <th style="width:10%">Line #</th>
+            <th style="width:60%">Secret</th>
+        </tr>
+        {repo_secrets_rows}
+    </table>
 </body>
 </html>"""
+
+    # Replace placeholders with actual values
+    formatted_html = html_content.format(
+        author=safe_metadata['author'],
+        repo_name=safe_metadata['repo_name'],
+        branch=safe_metadata['branch'],
+        commit_hash=safe_metadata['commit_hash'],
+        timestamp=safe_metadata['timestamp'],
+        diff_secrets_count=len(diff_secrets),
+        repo_secrets_count=len(repo_secrets),
+        diff_secrets_rows=diff_secrets_table_rows or "<tr><td colspan='4'>No secrets found in files to be pushed</td></tr>",
+        repo_secrets_rows=repo_secrets_table_rows or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"
+    )
+    
+    return formatted_html
 
 def generate_table_rows(secrets):
     """Generate HTML table rows for secrets."""
