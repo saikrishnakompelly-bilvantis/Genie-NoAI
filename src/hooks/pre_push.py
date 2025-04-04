@@ -745,7 +745,6 @@ def generate_and_open_report(secrets_found):
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
                 
-            logging.info("Added fixed table styling to HTML report")
         except Exception as e:
             logging.warning(f"Failed to add custom table styling: {e}")
             # Continue anyway since the basic report was generated
@@ -759,7 +758,6 @@ def generate_and_open_report(secrets_found):
  
 def main():
     try:
-        logging.info("Starting pre-push hook")
         check_python()
         check_git()
         
@@ -773,14 +771,12 @@ def main():
             ).stdout.strip()
             
             if "up to date" in status_output.lower() and "ahead" not in status_output:
-                logging.info("Pre-push hook completed - nothing to scan")
                 sys.exit(0)
         except Exception as e:
             logging.warning(f"Error checking git status: {e}")
         
         pushed_files = get_pushed_files()
         if not pushed_files:
-            logging.info("Pre-push hook completed successfully (nothing to push)")
             sys.exit(0)
         
         secrets_data = run_secret_scan_on_pushed_files()
@@ -802,7 +798,6 @@ def main():
         
         save_current_commit_as_pushed()
         
-        logging.info("Pre-push hook completed successfully")
             
     except Exception as e:
         logging.error(f"Error in pre-push hook: {str(e)}", exc_info=True)
