@@ -6,13 +6,25 @@ API_KEY = "sk_live_51LzUQHK8tQhPM6TyumgmeyV8cZ"
 STRIPE_SECRET_KEY = "sk_test_4eC39HqLyjWDarjtT1zdp7dc"
 AWS_API_KEY = "AKIAIOSFODNN7EXAMPLE"
 
+# Hard-coded API keys with very obvious patterns
+api_key = "api_key=1234567890abcdefghijklmnopqrstuvwxyz"
+API_KEY_VAR = "api_key=MzIyMzM0M2IzODIABCDEFGHIJKLMNYZ"
+secret_key = "secret_key=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
 # Database credentials
 DB_PASSWORD = "super_secure_password123!"
 DATABASE_CONNECTION = "postgresql://admin:verystrongpassword@localhost:5432/database"
+# Very obvious database connection string
+jdbc_connection = "jdbc:postgresql://username:password123@hostname:5432/database"
 
 # OAuth and access tokens
 GITHUB_TOKEN = "ghp_kBHjU8LoNSQK6ugMvp7jSavHhXsZG40jzzmM"
 OAUTH_TOKEN = "ya29.a0AfB_byAK1qr4xVXM-OmII_W9nkQh9sdJ7TLcpyoNs"
+
+# Very explicit password assignments
+password = "password=supersecretpassword123"
+pwd = "pwd=anothersecretpassword456"
+PASSWORD_VAR = "password=p@$$w0rd!!!"
 
 # Private key (this is a fake one)
 PRIVATE_KEY = """
@@ -47,6 +59,11 @@ aWvYbCbG7JqjMEkO3nBycMHNMV8gPQ9HaPfwOcpIKbX5H1NUZ2RiLQ==
 
 # JWT token
 JWT_SECRET = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+
+# Environment variable with secret
+SUPER_SECRET_KEY = "abcdef1234567890ABCDEF1234567890"
+# Example of export syntax in a command
+# export SUPER_SECRET_KEY="abcdef1234567890ABCDEF1234567890"
 
 # This shouldn't trigger detection (regular variable)
 regular_variable = "This is just a normal string"
