@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(git config --global --get core.hookspath)"
+SCRIPT_DIR="$(dirname "$0")"
 
 # Convert Windows path separators if needed
 SCRIPT_DIR=$(echo "$SCRIPT_DIR" | sed 's/\\/\//g')
