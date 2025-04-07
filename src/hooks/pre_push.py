@@ -684,6 +684,52 @@ def record_push_information(validation_results):
         logging.error(f"Error recording push information: {e}")
         return False
 
+def append_justification_to_commit(validation_results):
+    """Append security justification messages to the latest commit message."""
+    if not validation_results:
+        return False
+    
+    # Extract the justification messages
+    result_data = validation_results.get("secrets", {})
+    global_message = result_data.get("global_message", "")
+    
+    if not global_message:
+        return False
+    
+    try:
+        # Get the current commit message
+        get_message_cmd = ["git", "log", "-1", "--pretty=%B"]
+        current_message = subprocess.run(
+            get_message_cmd,
+            check=True,
+            capture_output=True,
+            text=True
+        ).stdout.strip()
+        
+        # Prepare the new commit message with the justification
+        justification_section = "\n\n[SECURITY JUSTIFICATION]\n" + global_message
+        new_message = current_message + justification_section
+        
+        # Create a temporary file for the new commit message
+        temp_file = SCRIPT_DIR / ".temp_commit_msg"
+        with open(temp_file, 'w') as f:
+            f.write(new_message)
+        
+        # Amend the commit with the new message
+        amend_cmd = ["git", "commit", "--amend", "-F", str(temp_file)]
+        subprocess.run(amend_cmd, check=True)
+        
+        # Delete the temporary file
+        if temp_file.exists():
+            temp_file.unlink()
+        
+        logging.info("Appended security justification to commit message")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to append justification to commit message: {e}")
+        return False
+
 def generate_and_open_report(secrets_found):
     try:
         reports_dir = SCRIPT_DIR / ".push-reports"
@@ -800,6 +846,9 @@ def main():
             validation_results = validation.results
             save_metadata(validation.results, secrets_data)
             record_push_information(validation_results)
+            
+            # Append justification to commit message if there are secrets
+            append_justification_to_commit(validation_results)
         else:
             save_metadata({}, [])
             logging.info("No secrets found in pushed files")
