@@ -685,21 +685,19 @@ def generate_and_open_report(secrets_found):
         
         scanner = SecretScanner()
         
-        # Scan the repository for additional secrets
+        # Scan the entire repository for all secrets
         repo_secrets = scanner.scan_repository()
         
-        # Create a set of keys for deduplication
-        seen_secrets = set()
-        # We'll pass push secrets and repo secrets separately to the HTML generator
-        # No need to create an all_secrets list that causes duplication
+        # We're no longer combining pushed secrets with repo secrets 
+        # This ensures the "Repository Secrets" tab shows ALL secrets in the repo
         
         output_path = reports_dir / "scan-report.html"
         
-        # Generate the report, passing secrets_found and repo_secrets directly
+        # Generate the report, passing repo_secrets directly
         success = generate_html_report(
             str(output_path),
             diff_secrets=secrets_found,
-            repo_secrets=repo_secrets,  # Only pass repo_secrets, not all_secrets
+            repo_secrets=repo_secrets,  # This now contains ALL repo secrets
             has_secrets=bool(secrets_found or repo_secrets)
         )
         

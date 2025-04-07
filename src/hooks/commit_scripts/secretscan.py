@@ -76,8 +76,8 @@ class SecretScanner:
         lines = content.splitlines()
         
         for line_num, line in enumerate(lines, 1):
-            # Skip empty lines and comments
-            if not line.strip() or line.strip().startswith(('#', '//', '/*', '*')):
+            # Only skip empty lines, but process all comments
+            if not line.strip():
                 continue
             
             # Check if we've already found a secret at this file:line
@@ -452,18 +452,10 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
                 already_seen.add(key)
                 unique_diff_secrets.append(secret)
         
-        # For repository scan, show all unique secrets (including diff secrets)
+        # For repository scan, use ALL repository secrets without filtering
         # This provides a complete view of all secrets in the codebase
-        all_secrets_for_repo_view = unique_diff_secrets.copy()
         
-        # Add repo secrets that aren't already in the diff scan
-        for secret in repo_secrets:
-            key = (secret.get('file_path', ''), secret.get('line_number', ''))
-            if key not in already_seen:
-                already_seen.add(key)
-                all_secrets_for_repo_view.append(secret)
-        
-        # Use the deduplicated lists for the rest of the function
+        # Use the deduplicated list for diff_secrets
         diff_secrets = unique_diff_secrets
         
         git_metadata = get_git_metadata()
@@ -471,8 +463,8 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         # Generate table rows for diff scan results
         diff_secrets_table_rows = generate_table_rows(diff_secrets)
 
-        # Generate table rows for repo scan results (including diff secrets)
-        repo_secrets_table_rows = generate_table_rows(all_secrets_for_repo_view)
+        # Generate table rows for repo scan results - use the full repo_secrets list
+        repo_secrets_table_rows = generate_table_rows(repo_secrets)
         
         # Empty disallowed files section
         disallowed_files_section = ""
