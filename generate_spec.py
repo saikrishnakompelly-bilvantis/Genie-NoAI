@@ -31,8 +31,7 @@ a = Analysis(['src/main.py'],
         'PySide6.QtWebChannel',
         'PySide6.QtNetwork',
         'PySide6.QtPrintSupport',
-        'python-dotenv',
-        'requests'
+        'python-dotenv'
     ],
     hookspath=[],
     hooksconfig={},

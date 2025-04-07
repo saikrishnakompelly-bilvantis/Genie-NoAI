@@ -12,7 +12,7 @@ a = Analysis(
         ('src/hooks/.env.example', 'hooks/'),  # Explicitly include .env.example
         ('src/hooks/.env.sample', 'hooks/'),   # Explicitly include .env.sample
     ],
-    hiddenimports=['PySide6.QtWebEngineCore', 'python-dotenv', 'requests'],
+    hiddenimports=['PySide6.QtWebEngineCore', 'python-dotenv'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

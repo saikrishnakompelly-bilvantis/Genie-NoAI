@@ -5,7 +5,8 @@ import io
 import time
 import datetime
 import logging
-import requests
+import subprocess
+import json
 import platform
 import getpass
 import base64
@@ -134,35 +135,54 @@ def get_github_token():
     return token
 
 def fetch_csv_from_github():
-    """Fetch the installations CSV from the external GitHub repository."""
+    """Fetch the installations CSV from the external GitHub repository using curl."""
     token = get_github_token()
     if not token:
         return None, None
     
-    headers = {
-        'Authorization': f'token {token}',
-        'Accept': 'application/vnd.github.v3+json'
-    }
-    
     url = f"{GITHUB_API_BASE}/repos/{TRACKING_REPO_OWNER}/{TRACKING_REPO_NAME}/contents/{CSV_PATH}"
     
     try:
-        response = requests.get(url, headers=headers)
+        # Prepare curl command
+        curl_command = [
+            "curl",
+            "-s",  # silent
+            "-H", "Accept: application/vnd.github.v3+json",
+            "-H", f"Authorization: token {token}",
+            url
+        ]
+
+        # Execute curl command
+        result = subprocess.run(curl_command, capture_output=True, text=True)
         
-        if response.status_code == 200:
-            # File exists
-            file_data = response.json()
-            content = base64.b64decode(file_data['content']).decode('utf-8')
-            return content, file_data['sha']
-        elif response.status_code == 404:
-            # File doesn't exist yet
-            logging.info(f"CSV file not found in tracking repository. It will be created.")
-            return "", None
+        if result.returncode == 0:
+            # Try to parse the JSON response
+            try:
+                response_json = json.loads(result.stdout)
+                
+                # Check if we have content
+                if "content" in response_json:
+                    content_encoded = response_json["content"]
+                    content = base64.b64decode(content_encoded).decode('utf-8')
+                    sha = response_json.get("sha")
+                    return content, sha
+                else:
+                    # Did we get an error?
+                    if "message" in response_json:
+                        if response_json.get("message") == "Not Found":
+                            logging.info(f"CSV file not found in tracking repository. It will be created.")
+                            return "", None
+                        else:
+                            logging.error(f"GitHub API error: {response_json.get('message')}")
+                            return None, None
+            except json.JSONDecodeError:
+                logging.error(f"Failed to parse JSON response from GitHub API")
+                return None, None
         else:
-            logging.error(f"GitHub API error: {response.status_code} - {response.text}")
+            logging.error(f"Curl command failed: {result.stderr}")
             return None, None
     except Exception as e:
-        logging.error(f"Error fetching CSV from GitHub: {e}")
+        logging.error(f"Error fetching CSV from GitHub with curl: {e}")
         return None, None
 
 def parse_csv_data(csv_content):
@@ -195,46 +215,71 @@ def csv_to_string(data):
     return output.getvalue()
 
 def update_csv_in_github(csv_content, file_sha, commit_message):
-    """Update the CSV file in the GitHub repository."""
+    """Update the CSV file in the GitHub repository using curl."""
     token = get_github_token()
     if not token:
         return False
-    
-    headers = {
-        'Authorization': f'token {token}',
-        'Accept': 'application/vnd.github.v3+json'
-    }
     
     url = f"{GITHUB_API_BASE}/repos/{TRACKING_REPO_OWNER}/{TRACKING_REPO_NAME}/contents/{CSV_PATH}"
     
     # Encode content for GitHub API
     content_encoded = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
     
+    # Create JSON payload
     if file_sha:
         # Update existing file
-        data = {
+        payload = {
             'message': commit_message,
             'content': content_encoded,
             'sha': file_sha
         }
     else:
         # Create new file
-        data = {
+        payload = {
             'message': commit_message,
             'content': content_encoded
         }
     
+    # Convert payload to JSON string
+    payload_json = json.dumps(payload)
+    
     try:
-        response = requests.put(url, headers=headers, json=data)
+        # Prepare curl command for PUT request
+        curl_command = [
+            "curl",
+            "-s",  # silent
+            "-X", "PUT",
+            "-H", "Accept: application/vnd.github.v3+json",
+            "-H", f"Authorization: token {token}",
+            "-H", "Content-Type: application/json",
+            "-d", payload_json,
+            url
+        ]
+
+        # Execute curl command
+        result = subprocess.run(curl_command, capture_output=True, text=True)
         
-        if response.status_code in (200, 201):
-            logging.info(f"Successfully updated CSV in GitHub: {commit_message}")
-            return True
+        if result.returncode == 0:
+            try:
+                response_json = json.loads(result.stdout)
+                if "content" in response_json:
+                    logging.info(f"Successfully updated CSV in GitHub: {commit_message}")
+                    return True
+                else:
+                    # Check for error message
+                    if "message" in response_json:
+                        logging.error(f"GitHub API error: {response_json.get('message')}")
+                    else:
+                        logging.error("Unknown error while updating CSV in GitHub")
+                    return False
+            except json.JSONDecodeError:
+                logging.error(f"Failed to parse JSON response from GitHub API")
+                return False
         else:
-            logging.error(f"GitHub API error: {response.status_code} - {response.text}")
+            logging.error(f"Curl command failed: {result.stderr}")
             return False
     except Exception as e:
-        logging.error(f"Error updating CSV in GitHub: {e}")
+        logging.error(f"Error updating CSV in GitHub with curl: {e}")
         return False
 
 def update_installation_status(status):
