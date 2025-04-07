@@ -255,6 +255,11 @@ def run_secret_scan_on_pushed_files():
             return []
             
         results = scanner.scan_files(pushed_files)
+        
+        # Add a single summary log instead of logging each secret
+        if results:
+            logging.info(f"Secret scan found {len(results)} potential secrets in {len(pushed_files)} files")
+            
         return results
     except Exception as e:
         logging.error(f"Secret scan failed: {e}")
@@ -748,7 +753,8 @@ def generate_and_open_report(secrets_found):
             logging.warning(f"Failed to add custom table styling: {e}")
             # Continue anyway since the basic report was generated
         
-        open_html_report(str(output_path))
+        if open_html_report(str(output_path)):
+            logging.info("HTML report generated and opened in browser")
         
         return True
     except Exception as e:
@@ -779,6 +785,8 @@ def main():
         if not pushed_files:
             sys.exit(0)
         
+        logging.info(f"Running pre-push hook for {len(pushed_files)} files")
+        
         secrets_data = run_secret_scan_on_pushed_files()
         
         validation_results = {}
@@ -786,6 +794,7 @@ def main():
         if secrets_data:
             validation = ValidationWindow()
             if not validation.run_validation(secrets_data):
+                logging.info("Push aborted by user during validation")
                 sys.exit(1)
             
             validation_results = validation.results
@@ -793,6 +802,7 @@ def main():
             record_push_information(validation_results)
         else:
             save_metadata({}, [])
+            logging.info("No secrets found in pushed files")
         
         generate_and_open_report(secrets_data)
         
