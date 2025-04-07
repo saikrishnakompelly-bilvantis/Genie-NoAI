@@ -79,6 +79,7 @@ def get_last_pushed_commit():
             if commit_hash:
                 return commit_hash
     except Exception as e:
+        # Keep this warning as it's helpful for debugging
         logging.warning(f"Error reading last pushed commit: {e}")
     
     return None
@@ -95,7 +96,6 @@ def save_current_commit_as_pushed():
         head_commit = head_result.stdout.strip()
         
         if not head_commit:
-            logging.warning("Could not get current HEAD commit")
             return False
             
         last_pushed_file = SCRIPT_DIR / ".last_pushed_commit"
@@ -125,8 +125,9 @@ def get_pushed_files():
                 
                 if files:
                     return files
-            except subprocess.CalledProcessError as e:
-                logging.warning(f"Error using last pushed reference: {e}")
+            except subprocess.CalledProcessError:
+                # No need for detailed logging here
+                pass
         
         rev_list_cmd = ['git', 'rev-list', '--count', '@{u}..HEAD']
         try:
@@ -256,7 +257,7 @@ def run_secret_scan_on_pushed_files():
         results = scanner.scan_files(pushed_files)
         return results
     except Exception as e:
-        logging.error(f"Secret scan failed: {str(e)}")
+        logging.error(f"Secret scan failed: {e}")
         return []
 
 def open_html_report(file_path):
@@ -751,7 +752,7 @@ def generate_and_open_report(secrets_found):
         
         return True
     except Exception as e:
-        logging.error(f"Error generating HTML report: {e}", exc_info=True)
+        logging.error(f"Error generating HTML report: {e}")
         return False
  
 def main():
@@ -771,6 +772,7 @@ def main():
             if "up to date" in status_output.lower() and "ahead" not in status_output:
                 sys.exit(0)
         except Exception as e:
+            # Keep this warning as it can be useful for identifying Git issues
             logging.warning(f"Error checking git status: {e}")
         
         pushed_files = get_pushed_files()
@@ -795,11 +797,11 @@ def main():
         generate_and_open_report(secrets_data)
         
         save_current_commit_as_pushed()
-        
             
     except Exception as e:
-        logging.error(f"Error in pre-push hook: {str(e)}", exc_info=True)
-        print(f"Error: {str(e)}", file=sys.stderr)
+        # Keep this error log as it's important for reporting critical failures
+        logging.error(f"Error in pre-push hook: {e}")
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
  
 if __name__ == "__main__":
