@@ -781,7 +781,7 @@ Categories=Utility;Development;
                 raise FileNotFoundError(f"Hooks source directory not found: {hooks_source}")
             
             # Copy hook files
-            hook_files = ['pre-push', 'post-push', 'scan-repo', 'pre_push.py', 'post_push.py', 'scan_repo.py']
+            hook_files = ['pre-push','pre_push.py']
             for hook_file in hook_files:
                 source_file = hooks_source / hook_file
                 target_file = Path(hooks_dir) / hook_file
