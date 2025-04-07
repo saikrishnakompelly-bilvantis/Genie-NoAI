@@ -15,7 +15,12 @@ block_cipher = None
 a = Analysis(['src/main.py'],
     pathex=[],
     binaries=[],
-    datas=[('src/assets', 'assets'), ('src/hooks', 'hooks')],
+    datas=[
+        ('src/assets', 'assets'), 
+        ('src/hooks', 'hooks'),
+        ('src/hooks/.env.example', 'hooks/'),  # Explicitly include .env.example
+        ('src/hooks/.env.sample', 'hooks/'),   # Explicitly include .env.sample
+    ],
     hiddenimports=[
         'PySide6.QtWidgets',
         'PySide6.QtCore',
@@ -25,7 +30,9 @@ a = Analysis(['src/main.py'],
         'PySide6.QtWebEngine',
         'PySide6.QtWebChannel',
         'PySide6.QtNetwork',
-        'PySide6.QtPrintSupport'
+        'PySide6.QtPrintSupport',
+        'python-dotenv',
+        'requests'
     ],
     hookspath=[],
     hooksconfig={},

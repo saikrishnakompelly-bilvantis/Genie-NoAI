@@ -15,6 +15,15 @@ from urllib.request import pathname2url
 import platform
 import logging
 import shutil
+import time
+import json
+
+# Include our installation_tracker module
+try:
+    from hooks.installation_tracker import record_installation, record_uninstallation
+except ImportError:
+    # Handle the case where the module might not be available yet
+    record_installation = record_uninstallation = lambda: None
 
 class ReportWindow(QMainWindow):
     def __init__(self, file_path):
@@ -849,6 +858,15 @@ Categories=Utility;Development;
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
                 
+                # Record installation in CSV and push to GitHub
+                try:
+                    # Import here in case the module wasn't available at startup
+                    from hooks.installation_tracker import record_installation
+                    record_installation()
+                    logging.info("Installation recorded in tracking CSV")
+                except Exception as e:
+                    logging.warning(f"Could not record installation: {e}")
+                
                 # Handle successful installation based on UI mode
                 if self.is_restricted_env:
                     # For HSBC mode with native UI
@@ -902,6 +920,15 @@ Categories=Utility;Development;
                 
                 subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                             check=False)  # Don't check as it might not exist
+            
+            # Record uninstallation before removing the directory
+            try:
+                # Import here in case the module wasn't available at startup
+                from hooks.installation_tracker import record_uninstallation
+                record_uninstallation()
+                logging.info("Uninstallation recorded in tracking CSV")
+            except Exception as e:
+                logging.warning(f"Could not record uninstallation: {e}")
             
             # Remove .genie directory completely
             genie_dir = os.path.expanduser('~/.genie')

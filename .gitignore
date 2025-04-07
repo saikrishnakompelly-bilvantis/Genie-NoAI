@@ -10,3 +10,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.env
+src/hooks/.env
+# But keep the templates
+!src/hooks/.env.example
+!src/hooks/.env.sample
