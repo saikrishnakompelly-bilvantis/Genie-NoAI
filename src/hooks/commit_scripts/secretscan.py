@@ -31,7 +31,6 @@ class SecretScanner:
         """Initialize the secret scanner."""
         self.logger = logger or logging.getLogger(__name__)
         self.found_secrets: List[Dict[str, Any]] = []
-        self._seen_secrets: Set[str] = set()
         # Track file_path:line_number combinations to avoid duplicates
         self._seen_file_lines: Set[Tuple[str, int]] = set()
     
@@ -99,10 +98,6 @@ class SecretScanner:
                 for match in matches:
                     value = match.group(0)
                     
-                    # Skip if we've seen this exact secret before
-                    if value in self._seen_secrets:
-                        continue
-                        
                     # Skip common non-secrets
                     if self.should_skip_value(value):
                         continue
@@ -135,7 +130,6 @@ class SecretScanner:
                         'detection_method': 'pattern_match'
                     }
                     content_secrets.append(secret)
-                    self._seen_secrets.add(value)
                     self._seen_file_lines.add(file_line_key)
                     
                     # Only log when we actually find something
@@ -160,10 +154,6 @@ class SecretScanner:
                 for match in matches:
                     var_name, value = match.groups()
                     
-                    # Skip if we've seen this exact secret before
-                    if value in self._seen_secrets:
-                        continue
-                        
                     # Skip common non-secrets
                     if self.should_skip_value(value):
                         continue
@@ -190,7 +180,6 @@ class SecretScanner:
                             'detection_method': 'variable_scan'
                         }
                         content_secrets.append(secret)
-                        self._seen_secrets.add(value)
                         self._seen_file_lines.add(file_line_key)
                         
                         # Only log when we actually find something
@@ -330,10 +319,6 @@ class SecretScanner:
             for match in matches:
                 value = match.group(0)
                 
-                # Skip if we've seen this exact secret before
-                if value in self._seen_secrets:
-                    continue
-                    
                 # Skip common non-secrets
                 if self.should_skip_value(value):
                     continue
@@ -366,7 +351,6 @@ class SecretScanner:
                     'detection_method': 'pattern_match'
                 }
                 self.found_secrets.append(secret)
-                self._seen_secrets.add(value)
                 self._seen_file_lines.add(file_line_key)
                 
                 self.logger.info(f"Found potential {secret_type} in {file_path}:{line_number}")
@@ -385,10 +369,6 @@ class SecretScanner:
             for match in matches:
                 var_name, value = match.groups()
                 
-                # Skip if we've seen this exact secret before
-                if value in self._seen_secrets:
-                    continue
-                    
                 # Skip common non-secrets
                 if self.should_skip_value(value):
                     continue
@@ -415,7 +395,6 @@ class SecretScanner:
                         'detection_method': 'variable_scan'
                     }
                     self.found_secrets.append(secret)
-                    self._seen_secrets.add(value)
                     self._seen_file_lines.add(file_line_key)
                     
                     self.logger.info(f"Found potential secret in variable '{var_name}' in {file_path}:{line_number}")
@@ -494,7 +473,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         # Single summary log
         logging.info(f"Generating HTML report with {len(diff_secrets)} diff secrets and {len(repo_secrets)} repo secrets")
         
-        # Deduplicate secrets for both displays
+        # Deduplicate secrets for diff display based on file+line
         diff_seen = set()
         unique_diff_secrets = []
         
@@ -504,7 +483,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
                 diff_seen.add(key)
                 unique_diff_secrets.append(secret)
         
-        # For repository scan, deduplicate but keep all unique secrets
+        # For repository scan, deduplicate based on file+line
         repo_seen = set()
         unique_repo_secrets = []
         
@@ -789,15 +768,16 @@ def main() -> None:
             logging.error(f"Error scanning files to be pushed: {e}")
             sys.exit(1)
     
-    # Combine diff_results with repo_results to ensure all secrets are included
-    seen_secrets = {(s.get('file_path', ''), s.get('line_number', 0)) for s in repo_results}
+    # Merge diff_results with repo_results to ensure all secrets are included
+    # Track by file path and line number to avoid duplicates
+    seen_locations = {(s.get('file_path', ''), s.get('line_number', 0)) for s in repo_results}
     
-    # Add any diff secrets that aren't already in the repo secrets
+    # Add any diff secrets that aren't already in the repo secrets at the same location
     for secret in diff_results:
         key = (secret.get('file_path', ''), secret.get('line_number', 0))
-        if key not in seen_secrets:
+        if key not in seen_locations:
             repo_results.append(secret)
-            seen_secrets.add(key)
+            seen_locations.add(key)
     
     # Generate HTML report
     try:
