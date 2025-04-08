@@ -455,12 +455,16 @@ class SecretScanner:
             for file_path in files_to_scan:
                 if os.path.exists(file_path):
                     self.logger.info(f"Scanning file: {file_path}")
-                    file_secrets = self.scan_file(file_path)
-                    if file_secrets:
-                        self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
-                        for secret in file_secrets:
-                            self.logger.info(f"Secret found: {secret.get('file_path')}:{secret.get('line_number')} - {secret.get('type')}")
-                        self.found_secrets.extend(file_secrets)
+                    try:
+                        file_secrets = self.scan_file(file_path)
+                        if file_secrets:
+                            self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                            for secret in file_secrets:
+                                self.logger.info(f"Secret found: {secret.get('file_path')}:{secret.get('line_number')} - {secret.get('type')}")
+                            self.found_secrets.extend(file_secrets)
+                    except Exception as e:
+                        self.logger.error(f"Error scanning file {file_path}: {e}")
+                        continue
                 else:
                     self.logger.warning(f"File does not exist: {file_path}")
             
