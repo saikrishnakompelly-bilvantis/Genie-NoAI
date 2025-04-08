@@ -53,12 +53,19 @@ TRACKING_REPO_OWNER = os.environ.get("TRACKING_REPO_OWNER", "your-org-name")
 TRACKING_REPO_NAME = os.environ.get("TRACKING_REPO_NAME", "installation-tracking")
 CSV_PATH = os.environ.get("TRACKING_CSV_PATH", "installations.csv")
 
-def get_github_username():
-    """Get the GitHub username from Git configuration."""
+def run_subprocess(cmd, **kwargs):
+    """Run a subprocess command with appropriate flags to hide console window on Windows."""
+    if platform.system().lower() == 'windows':
+        # Add CREATE_NO_WINDOW flag on Windows to prevent console window from appearing
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    
+    return subprocess.run(cmd, **kwargs)
+
+def get_git_email():
+    """Get the email from Git configuration."""
     try:
-        import subprocess
         # Try to get user.email from git config
-        result = subprocess.run(
+        result = run_subprocess(
             ['git', 'config', 'user.email'],
             capture_output=True,
             text=True,
@@ -66,40 +73,35 @@ def get_github_username():
         )
         email = result.stdout.strip()
         
-        # Try to get user.name from git config
-        result = subprocess.run(
-            ['git', 'config', 'user.name'],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        name = result.stdout.strip()
+        if email:
+            return email
         
-        # Try to get GitHub username if set explicitly
-        result = subprocess.run(
-            ['git', 'config', 'github.user'],
-            capture_output=True,
-            text=True,
-            check=False
-        )
-        github_user = result.stdout.strip()
-        
-        if github_user:
-            # If github.user is explicitly set, use that
-            return github_user
-        else:
-            # Otherwise, use user.email (before the @) or user.name
-            if email and '@' in email:
-                # If it's a GitHub email, it might be username@users.noreply.github.com
-                if 'users.noreply.github.com' in email:
-                    return email.split('@')[0]
-                # Otherwise return the username part of the email
-                return email.split('@')[0]
-            elif name:
-                # As a fallback, use the Git username (converted to lowercase with hyphens)
-                return name.lower().replace(' ', '-')
+        # If no email found, return a placeholder
+        return "no-email-configured"
     except Exception as e:
-        logging.warning(f"Error getting GitHub username: {e}")
+        logging.warning(f"Error getting email from git config: {e}")
+        return "git-config-error"
+
+def get_username():
+    """Get the username from whoami command, removing 'heap/' prefix if it exists."""
+    try:
+        # Run the whoami command to get system username
+        result = run_subprocess(
+            ['whoami'],
+            capture_output=True,
+            text=True,
+            check=False
+        )
+        username = result.stdout.strip()
+        
+        # If username contains "heap/", remove that prefix
+        if '/' in username and username.lower().startswith('heap/'):
+            username = username.split('/', 1)[1]
+        
+        if username:
+            return username
+    except Exception as e:
+        logging.warning(f"Error getting username from whoami: {e}")
     
     # If all else fails, get the system username
     return getpass.getuser()
@@ -107,18 +109,21 @@ def get_github_username():
 def get_user_info():
     """Get current user information for tracking."""
     try:
-        # Use GitHub username instead of system username
-        username = get_github_username()
+        # Get username from whoami command
+        username = get_username()
+        # Get email from git config
+        email = get_git_email()
         hostname = socket.gethostname()
         os_info = f"{platform.system()} {platform.release()}"
         return {
             "user": username,
+            "email": email,
             "hostname": hostname,
             "os": os_info
         }
     except Exception as e:
         logging.error(f"Error getting user info: {e}")
-        return {"user": "unknown", "hostname": "unknown", "os": "unknown"}
+        return {"user": "unknown", "email": "unknown", "hostname": "unknown", "os": "unknown"}
 
 def get_github_token():
     """Get GitHub token from environment variables."""
@@ -152,8 +157,8 @@ def fetch_csv_from_github():
             url
         ]
 
-        # Execute curl command
-        result = subprocess.run(curl_command, capture_output=True, text=True)
+        # Execute curl command using our wrapper function
+        result = run_subprocess(curl_command, capture_output=True, text=True)
         
         if result.returncode == 0:
             # Try to parse the JSON response
@@ -203,10 +208,15 @@ def csv_to_string(data):
     output = io.StringIO()
     
     if not data:
-        # Just write headers for empty data
+        # Just write headers for empty data with email field added
         writer = csv.writer(output)
-        writer.writerow(['user', 'timestamp', 'status', 'hostname', 'os'])
+        writer.writerow(['user', 'email', 'timestamp', 'status', 'hostname', 'os'])
     else:
+        # Check if we need to add the email field to existing data
+        if 'email' not in data[0]:
+            for entry in data:
+                entry['email'] = "unknown"
+                
         # Write headers and data rows
         writer = csv.DictWriter(output, fieldnames=data[0].keys())
         writer.writeheader()
@@ -256,8 +266,8 @@ def update_csv_in_github(csv_content, file_sha, commit_message):
             url
         ]
 
-        # Execute curl command
-        result = subprocess.run(curl_command, capture_output=True, text=True)
+        # Execute curl command using our wrapper function
+        result = run_subprocess(curl_command, capture_output=True, text=True)
         
         if result.returncode == 0:
             try:
@@ -290,6 +300,7 @@ def update_installation_status(status):
     """
     user_info = get_user_info()
     username = user_info['user']
+    email = user_info['email']
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Fetch current CSV content from GitHub
@@ -308,6 +319,7 @@ def update_installation_status(status):
             # Update existing record
             entry['timestamp'] = now
             entry['status'] = status
+            entry['email'] = email  # Update email in case it changed
             entry['hostname'] = user_info['hostname']
             entry['os'] = user_info['os']
             user_found = True
@@ -319,14 +331,22 @@ def update_installation_status(status):
             # Create the first record with proper headers
             data = [{
                 'user': username,
+                'email': email,
                 'timestamp': now,
                 'status': status,
                 'hostname': user_info['hostname'],
                 'os': user_info['os']
             }]
         else:
+            # Make sure existing data has the email field
+            if 'email' not in data[0]:
+                for entry in data:
+                    entry['email'] = "unknown"
+                    
+            # Add new record
             data.append({
                 'user': username,
+                'email': email,
                 'timestamp': now,
                 'status': status,
                 'hostname': user_info['hostname'],

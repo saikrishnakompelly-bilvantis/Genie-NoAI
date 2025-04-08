@@ -18,6 +18,15 @@ import shutil
 import time
 import json
 
+# Helper function for subprocess calls to prevent terminal windows
+def run_subprocess(cmd, **kwargs):
+    """Run a subprocess command with appropriate flags to hide console window on Windows."""
+    if platform.system().lower() == 'windows':
+        # Add CREATE_NO_WINDOW flag on Windows to prevent console window from appearing
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    
+    return subprocess.run(cmd, **kwargs)
+
 # Include our installation_tracker module
 try:
     from hooks.installation_tracker import record_installation, record_uninstallation
@@ -257,7 +266,7 @@ class GenieApp(QMainWindow):
                         end tell
                         '''
                         logging.info(f"Creating macOS alias with script: {alias_script}")
-                        result = subprocess.run(['osascript', '-e', alias_script], capture_output=True, text=True)
+                        result = run_subprocess(['osascript', '-e', alias_script], capture_output=True, text=True)
                         if result.returncode != 0:
                             logging.error(f"Error creating macOS alias: {result.stderr}")
                         else:
@@ -816,40 +825,36 @@ Categories=Utility;Development;
                 if platform.system().lower() == 'windows':
                     # Windows-specific code with creationflags
                     # Remove any existing Git hooks configuration
-                    subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                                check=False,  # Don't check as it might not exist
-                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                    subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                                check=False,  # Don't check as it might not exist
-                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                    
-                    # Set up new Git hooks configuration
-                    subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
-                                check=True,
-                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                    
-                    # Create git alias for scan-repo with absolute path
-                    scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
-                    alias_cmd = f'!bash "{scan_repo_path}"'
-                    subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
-                                check=True,
-                                creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                else:
-                    # macOS/Linux code without creationflags
-                    # Remove any existing Git hooks configuration
-                    subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                    run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
                                 check=False)  # Don't check as it might not exist
-                    subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                                 check=False)  # Don't check as it might not exist
                     
                     # Set up new Git hooks configuration
-                    subprocess.run(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
+                    run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
                                 check=True)
                     
                     # Create git alias for scan-repo with absolute path
                     scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
                     alias_cmd = f'!bash "{scan_repo_path}"'
-                    subprocess.run(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                    run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                                check=True)
+                else:
+                    # macOS/Linux code without creationflags
+                    # Remove any existing Git hooks configuration
+                    run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                                check=False)  # Don't check as it might not exist
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                                check=False)  # Don't check as it might not exist
+                    
+                    # Set up new Git hooks configuration
+                    run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
+                                check=True)
+                    
+                    # Create git alias for scan-repo with absolute path
+                    scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
+                    alias_cmd = f'!bash "{scan_repo_path}"'
+                    run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
                                 check=True)
                 
                 # Create a config file to store the hooks directory path and installation status
@@ -906,19 +911,17 @@ Categories=Utility;Development;
         try:
             # Remove Git configurations first
             if platform.system().lower() == 'windows':
-                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                            check=False,  # Don't check as it might not exist
-                            creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-                
-                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                            check=False,  # Don't check as it might not exist
-                            creationflags=subprocess.CREATE_NO_WINDOW)  # Prevent terminal window
-            else:
-                # Non-Windows platforms don't have creationflags
-                subprocess.run(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
                             check=False)  # Don't check as it might not exist
                 
-                subprocess.run(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                            check=False)  # Don't check as it might not exist
+            else:
+                # Non-Windows platforms don't have creationflags
+                run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
+                            check=False)  # Don't check as it might not exist
+                
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                             check=False)  # Don't check as it might not exist
             
             # Record uninstallation before removing the directory
@@ -941,21 +944,19 @@ Categories=Utility;Development;
                 raise Exception("Failed to remove .genie directory")
                 
             if platform.system().lower() == 'windows':
-                hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                        capture_output=True, 
-                                        text=True,
-                                        creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
-                
-                scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                            capture_output=True, 
-                                            text=True,
-                                            creationflags=subprocess.CREATE_NO_WINDOW).stdout.strip()
-            else:
-                hooks_path = subprocess.run(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                hooks_path = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
                                         capture_output=True, 
                                         text=True).stdout.strip()
                 
-                scan_repo_alias = subprocess.run(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                                            capture_output=True, 
+                                            text=True).stdout.strip()
+            else:
+                hooks_path = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                        capture_output=True, 
+                                        text=True).stdout.strip()
+                
+                scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
                                             capture_output=True, 
                                             text=True).stdout.strip()
             
@@ -1261,7 +1262,7 @@ Categories=Utility;Development;
                 
                 # Execute the scan
                 cmd = [sys.executable, scan_script]
-                result = subprocess.run(
+                result = run_subprocess(
                     cmd,
                     capture_output=True,
                     text=True,

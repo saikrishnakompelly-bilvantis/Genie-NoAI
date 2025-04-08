@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any
 import time
 import webbrowser
+import platform
  
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +23,15 @@ sys.path.append(str(SCRIPT_DIR))
 from commit_scripts.secretscan import SecretScanner
 from commit_scripts.utils import mask_secret
 from commit_scripts.secretscan import generate_html_report
+
+# Helper function for subprocess calls to prevent terminal windows
+def run_subprocess(cmd, **kwargs):
+    """Run a subprocess command with appropriate flags to hide console window on Windows."""
+    if platform.system().lower() == 'windows':
+        # Add CREATE_NO_WINDOW flag on Windows to prevent console window from appearing
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    
+    return subprocess.run(cmd, **kwargs)
  
 def get_script_dir():
     return SCRIPT_DIR
@@ -33,15 +43,15 @@ def check_python():
  
 def check_git():
     try:
-        subprocess.run(['git', '--version'], check=True, capture_output=True)
+        run_subprocess(['git', '--version'], check=True, capture_output=True)
     except subprocess.CalledProcessError:
         show_message_box("Error: Git is not installed. Please install Git before proceeding.")
         sys.exit(1)
  
     try:
-        username = subprocess.run(['git', 'config', '--global', 'user.name'],
+        username = run_subprocess(['git', 'config', '--global', 'user.name'],
                                 check=True, capture_output=True, text=True).stdout.strip()
-        email = subprocess.run(['git', 'config', '--global', 'user.email'],
+        email = run_subprocess(['git', 'config', '--global', 'user.email'],
                              check=True, capture_output=True, text=True).stdout.strip()
         
         if not username or not email:
@@ -87,7 +97,7 @@ def get_last_pushed_commit():
 def save_current_commit_as_pushed():
     try:
         head_cmd = ['git', 'rev-parse', 'HEAD']
-        head_result = subprocess.run(
+        head_result = run_subprocess(
             head_cmd,
             check=True,
             capture_output=True,
@@ -115,7 +125,7 @@ def get_pushed_files():
             try:
                 diff_cmd = ['git', 'diff', '--name-only', f'{last_pushed}', 'HEAD']
                 
-                result = subprocess.run(
+                result = run_subprocess(
                     diff_cmd,
                     check=True,
                     capture_output=True,
@@ -131,7 +141,7 @@ def get_pushed_files():
         
         rev_list_cmd = ['git', 'rev-list', '--count', '@{u}..HEAD']
         try:
-            rev_count_output = subprocess.run(
+            rev_count_output = run_subprocess(
                 rev_list_cmd, 
                 check=True, 
                 capture_output=True, 
@@ -147,7 +157,7 @@ def get_pushed_files():
         
         try:
             diff_cmd = ['git', 'diff', '--name-only', '@{u}..HEAD']
-            result = subprocess.run(
+            result = run_subprocess(
                 diff_cmd,
                 check=True,
                 capture_output=True,
@@ -161,7 +171,7 @@ def get_pushed_files():
             pass
         
         try:
-            branch_result = subprocess.run(
+            branch_result = run_subprocess(
                 ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
                 check=True,
                 capture_output=True,
@@ -171,7 +181,7 @@ def get_pushed_files():
             
             remote_branch_exists = False
             try:
-                check_remote = subprocess.run(
+                check_remote = run_subprocess(
                     ['git', 'ls-remote', '--heads', 'origin', current_branch],
                     check=True,
                     capture_output=True,
@@ -183,7 +193,7 @@ def get_pushed_files():
             
             if not remote_branch_exists:
                 commit_count_cmd = ['git', 'rev-list', '--count', 'HEAD']
-                commit_count_result = subprocess.run(
+                commit_count_result = run_subprocess(
                     commit_count_cmd,
                     check=True,
                     capture_output=True,
@@ -195,56 +205,44 @@ def get_pushed_files():
                     return []
                 
                 all_files_cmd = ['git', 'ls-files']
-                all_files_result = subprocess.run(
+                all_files_result = run_subprocess(
                     all_files_cmd,
                     check=True,
                     capture_output=True,
                     text=True
                 )
-                files = [f for f in all_files_result.stdout.strip().split('\n') if f]
-                return files
-            
-            result = subprocess.run(
-                ['git', 'diff', '--name-only', 'origin/' + current_branch + '..HEAD'],
+                return [f for f in all_files_result.stdout.strip().split('\n') if f]
+        except Exception as e:
+            logging.error(f"Error determining files in new branch: {e}")
+        
+        # Last resort, get files in latest commit
+        try:
+            result = run_subprocess(
+                ['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'],
                 check=True,
                 capture_output=True,
                 text=True
             )
             files = [f for f in result.stdout.strip().split('\n') if f]
-            
-            if files:
-                return files
+            return files
         except subprocess.CalledProcessError:
-            try:
-                count_cmd = ['git', 'rev-list', 'HEAD', '--count', '-n', '1']
-                count_result = subprocess.run(
-                    count_cmd,
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                commit_count = int(count_result.stdout.strip() or '0')
-                
-                if commit_count == 0:
-                    return []
-                
-                limit = min(10, commit_count)
-                result = subprocess.run(
-                    ['git', 'diff', '--name-only', f'HEAD~{limit}..HEAD'],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
-                files = [f for f in result.stdout.strip().split('\n') if f]
-                
-                if files:
-                    return files
-            except subprocess.CalledProcessError:
-                return []
+            pass
+        
+        # If all else fails, get all tracked files
+        try:
+            count_result = run_subprocess(
+                ['git', 'ls-files', '--exclude-standard'],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            return [f for f in count_result.stdout.strip().split('\n') if f]
+        except Exception as e:
+            logging.error(f"Error getting tracked files: {e}")
+            return []
     except Exception as e:
-        logging.error(f"Unexpected error getting pushed files: {e}")
-    
-    return []
+        logging.error(f"Error getting pushed files: {e}")
+        return []
  
 def run_secret_scan_on_pushed_files():
     try:
@@ -699,7 +697,7 @@ def append_justification_to_commit(validation_results):
     try:
         # Get the current commit message
         get_message_cmd = ["git", "log", "-1", "--pretty=%B"]
-        current_message = subprocess.run(
+        current_message = run_subprocess(
             get_message_cmd,
             check=True,
             capture_output=True,
@@ -717,7 +715,7 @@ def append_justification_to_commit(validation_results):
         
         # Amend the commit with the new message
         amend_cmd = ["git", "commit", "--amend", "-F", str(temp_file)]
-        subprocess.run(amend_cmd, check=True)
+        run_subprocess(amend_cmd, check=True)
         
         # Delete the temporary file
         if temp_file.exists():
@@ -814,7 +812,7 @@ def main():
         
         try:
             status_cmd = ['git', 'status', '-sb']
-            status_output = subprocess.run(
+            status_output = run_subprocess(
                 status_cmd,
                 check=True,
                 capture_output=True,

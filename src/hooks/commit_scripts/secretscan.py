@@ -7,6 +7,7 @@ import re
 import json
 import logging
 import subprocess
+import platform
 import math
 from typing import List, Dict, Union, Set, Tuple, Optional, Any
 from datetime import datetime
@@ -18,7 +19,7 @@ from .config import (
 from .utils import (
     setup_logging, get_git_metadata,
     is_git_repo, has_unstaged_changes, get_git_diff,
-    mask_secret
+    mask_secret, run_subprocess
 )
 import webbrowser
 from pathlib import Path
@@ -201,13 +202,29 @@ class SecretScanner:
         return self.found_secrets
     
     def scan_file(self, file_path: str) -> List[Dict[str, Union[str, int]]]:
-        """Scan a single file for secrets."""
+        """Scan a single file for potential secrets."""
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return self.scan_content(content, file_path=file_path)
+            self.logger.info(f"Scanning file: {file_path}")
+            
+            # Read file content
+            cmd = ['git', 'show', f':0:{file_path}']
+            try:
+                result = run_subprocess(cmd, capture_output=True, text=True, check=True)
+                content = result.stdout
+            except subprocess.CalledProcessError:
+                # File might not be in git yet, try reading directly
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as file:
+                        content = file.read()
+                except UnicodeDecodeError:
+                    # Try reading as binary and decoding with 'latin-1'
+                    with open(file_path, 'r', encoding='latin-1') as file:
+                        content = file.read()
+            
+            # Scan the content
+            return self.scan_content(content, file_path)
         except Exception as e:
-            logging.error(f"Error scanning file {file_path}: {e}")
+            self.logger.error(f"Error scanning file {file_path}: {e}")
             return []
 
     def scan_files_to_push(self, files_list=None) -> List[Dict[str, Any]]:
@@ -399,42 +416,39 @@ class SecretScanner:
                     return  # Once we find a secret, no need to check other patterns
 
     def scan_repository(self) -> List[Dict[str, Union[str, int]]]:
-        """Scan the entire Git repository for secrets."""
-        all_results = []
-        # Track file/line combinations we've already seen
-        seen_file_lines = set()
+        """Scan the entire repository for secrets."""
+        self.logger.info("Starting repository scan...")
         
         try:
-            # Get list of all files in the repository
+            # Get all tracked files
             cmd = ['git', 'ls-files']
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            files = result.stdout.strip().split('\n')
+            result = run_subprocess(cmd, capture_output=True, text=True, check=True)
+            all_files = result.stdout.strip().split('\n')
             
-            # Filter out excluded files and directories
-            files = [
-                f for f in files
-                if not any(f.endswith(ext) for ext in EXCLUDED_EXTENSIONS) and
-                not any(d in f.split('/') for d in EXCLUDED_DIRECTORIES)
-            ]
-            
-            # Scan each file
-            for file in files:
-                if os.path.exists(file):  # Make sure file still exists
-                    results = self.scan_file(file)
+            # Filter files
+            files_to_scan = []
+            for file_path in all_files:
+                # Skip empty lines
+                if not file_path:
+                    continue
                     
-                    # Only add results that haven't been seen before based on file path and line number
-                    for result in results:
-                        file_line = (result.get('file_path', ''), result.get('line_number', ''))
-                        if file_line not in seen_file_lines:
-                            seen_file_lines.add(file_line)
-                            all_results.append(result)
-        
-        except subprocess.CalledProcessError as e:
-            logging.error(f"Error listing repository files: {e}")
+                # Skip files with excluded extensions
+                _, ext = os.path.splitext(file_path)
+                if ext in EXCLUDED_EXTENSIONS:
+                    continue
+                    
+                # Skip files in excluded directories
+                if any(excluded_dir in file_path.split(os.path.sep) for excluded_dir in EXCLUDED_DIRECTORIES):
+                    continue
+                    
+                files_to_scan.append(file_path)
+            
+            # Scan filtered files
+            return self.scan_files(files_to_scan)
+            
         except Exception as e:
-            logging.error(f"Error scanning repository: {e}")
-        
-        return all_results
+            self.logger.error(f"Error scanning repository: {e}")
+            return []
 
 def generate_html_report(output_path: str, **kwargs) -> bool:
     """Generate an HTML report with diff scan and repo scan results."""

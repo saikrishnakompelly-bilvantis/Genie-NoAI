@@ -4,8 +4,18 @@ import os
 import math
 import logging
 import subprocess
+import platform
 from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime
+
+
+def run_subprocess(cmd, **kwargs):
+    """Run a subprocess command with appropriate flags to hide console window on Windows."""
+    if platform.system().lower() == 'windows':
+        # Add CREATE_NO_WINDOW flag on Windows to prevent console window from appearing
+        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+    
+    return subprocess.run(cmd, **kwargs)
 
 
 def setup_logging(log_file: str) -> None:
@@ -31,12 +41,25 @@ def get_git_metadata() -> Dict[str, str]:
     """Retrieve Git metadata like author, branch, commit hash, and timestamp."""
     try:
         repo_name = os.path.basename(os.getcwd())
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).decode().strip()
-        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
-        author = subprocess.check_output(["git", "log", "-1", "--pretty=format:%an"]).decode().strip()
-        timestamp = subprocess.check_output(
-            ["git", "log", "-1", "--pretty=format:%cd", "--date=format:%Y-%m-%d %I:%M:%S %p"]
-        ).decode().strip()
+        
+        # Use run_subprocess instead of check_output
+        branch_result = run_subprocess(["git", "rev-parse", "--abbrev-ref", "HEAD"], 
+                                     capture_output=True, text=True, check=True)
+        branch = branch_result.stdout.strip()
+        
+        commit_result = run_subprocess(["git", "rev-parse", "HEAD"], 
+                                     capture_output=True, text=True, check=True)
+        commit_hash = commit_result.stdout.strip()
+        
+        author_result = run_subprocess(["git", "log", "-1", "--pretty=format:%an"], 
+                                     capture_output=True, text=True, check=True)
+        author = author_result.stdout.strip()
+        
+        timestamp_result = run_subprocess(
+            ["git", "log", "-1", "--pretty=format:%cd", "--date=format:%Y-%m-%d %I:%M:%S %p"],
+            capture_output=True, text=True, check=True
+        )
+        timestamp = timestamp_result.stdout.strip()
     except subprocess.CalledProcessError:
         repo_name = "Unknown Repo"
         branch = "Unknown Branch"
@@ -55,7 +78,7 @@ def get_git_metadata() -> Dict[str, str]:
 def is_git_repo() -> bool:
     """Check if the current directory is a Git repository."""
     try:
-        subprocess.run(
+        run_subprocess(
             ["git", "rev-parse", "--is-inside-work-tree"],
             check=True,
             capture_output=True
@@ -66,7 +89,7 @@ def is_git_repo() -> bool:
 
 def has_unstaged_changes() -> bool:
     """Check if there are unstaged changes in Git."""
-    diff_output = subprocess.run(
+    diff_output = run_subprocess(
         ["git", "diff", "--unified=0", "--no-color"],
         capture_output=True,
         text=True
@@ -75,7 +98,7 @@ def has_unstaged_changes() -> bool:
 
 def get_git_diff() -> Dict[str, List[Tuple[int, str]]]:
     """Retrieve the diff of changed lines from Git."""
-    diff_output = subprocess.run(
+    diff_output = run_subprocess(
         ['git', 'diff', '--unified=0', '--no-color'],
         capture_output=True,
         text=True
