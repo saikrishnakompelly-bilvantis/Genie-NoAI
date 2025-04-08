@@ -733,29 +733,48 @@ def main() -> None:
     """Main entry point for the secret scanner."""
     args = sys.argv[1:]
     scanner = SecretScanner()
-
+    
+    # Always scan the repository first
+    logging.info("Scanning entire repository...")
+    try:
+        repo_results = scanner.scan_repository()
+        if repo_results:
+            print("Potential secrets found in repository:")
+            for result in repo_results:
+                print(f"- {result['file_path']}:{result['line_number']}")
+    except Exception as e:
+        logging.error(f"Error scanning repository: {e}")
+        sys.exit(1)
+    
+    # If --diff flag is present, also scan files to be pushed
+    diff_results = []
     if "--diff" in args:
-        logging.info("Scanning only files to be pushed...")
+        logging.info("Scanning files to be pushed...")
         try:
-            results = scanner.scan_files_to_push()
-            if results:
+            diff_results = scanner.scan_files_to_push()
+            if diff_results:
                 print("Potential secrets found in files to be pushed:")
-                for result in results:
+                for result in diff_results:
                     print(f"- {result['file_path']}:{result['line_number']}")
         except Exception as e:
             logging.error(f"Error scanning files to be pushed: {e}")
             sys.exit(1)
-    else:
-        logging.info("Scanning entire repository...")
-        try:
-            results = scanner.scan_repository()
-            if results:
-                print("Potential secrets found in repository:")
-                for result in results:
-                    print(f"- {result['file_path']}:{result['line_number']}")
-        except Exception as e:
-            logging.error(f"Error scanning repository: {e}")
-            sys.exit(1)
+    
+    # Generate HTML report
+    try:
+        output_path = "secret_scan_report.html"
+        success = generate_html_report(
+            output_path,
+            diff_secrets=diff_results,
+            repo_secrets=repo_results
+        )
+        if success:
+            print(f"HTML report generated at {output_path}")
+        else:
+            print("Failed to generate HTML report")
+    except Exception as e:
+        logging.error(f"Error generating HTML report: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
