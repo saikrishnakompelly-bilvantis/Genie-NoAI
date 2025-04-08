@@ -452,6 +452,14 @@ class SecretScanner:
             # Initialize a separate list to accumulate all repository secrets
             all_repo_secrets = []
             
+            # Track total secrets found during the repository scan
+            total_secrets_found = 0
+            
+            # Clear seen secrets and file lines to ensure a fresh scan
+            # Only do this if you want to treat repository scan independently
+            # self._seen_secrets = set()
+            # self._seen_file_lines = set()
+            
             # Scan each file and accumulate results
             for file_path in files_to_scan:
                 if os.path.exists(file_path):
@@ -464,7 +472,9 @@ class SecretScanner:
                         file_secrets = self.scan_file(file_path)
                         
                         if file_secrets:
-                            self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                            secrets_count = len(file_secrets)
+                            total_secrets_found += secrets_count
+                            self.logger.info(f"Found {secrets_count} secrets in {file_path}")
                             for secret in file_secrets:
                                 self.logger.info(f"Secret found: {secret.get('file_path')}:{secret.get('line_number')} - {secret.get('type')}")
                             
@@ -476,8 +486,13 @@ class SecretScanner:
                 else:
                     self.logger.warning(f"File does not exist: {file_path}")
             
+            # Verify the count is accurate
+            actual_count = len(all_repo_secrets)
+            if actual_count != total_secrets_found:
+                self.logger.warning(f"Secret count mismatch: Counted {total_secrets_found} but list contains {actual_count}")
+            
             # Update the total count with our comprehensive list
-            self.logger.info(f"Found {len(all_repo_secrets)} potential secrets in repository")
+            self.logger.info(f"Found {actual_count} potential secrets in repository")
             
             if all_repo_secrets:
                 self.logger.info("Repository secrets found:")
@@ -497,38 +512,52 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         diff_secrets = kwargs.get('diff_secrets', [])
         repo_secrets = kwargs.get('repo_secrets', [])
         
-        # Add debug logging
+        # Add debug logging for the secrets we received
         logging.info(f"Generating HTML report with {len(diff_secrets)} diff secrets and {len(repo_secrets)} repo secrets")
-        if repo_secrets:
-            logging.info("Repository secrets found:")
-            for secret in repo_secrets:
-                logging.info(f"- {secret.get('file_path')}:{secret.get('line_number')}")
         
-        # Deduplicate secrets for the diff scan display
-        already_seen = set()
+        # Log details about repo secrets
+        if repo_secrets:
+            logging.info("Repository secrets found for HTML report:")
+            for i, secret in enumerate(repo_secrets, 1):
+                logging.info(f"  {i}. {secret.get('file_path')}:{secret.get('line_number')} - {secret.get('type', 'Unknown')}")
+        else:
+            logging.warning("No repository secrets were passed to the HTML report generator")
+            
+        # Deduplicate secrets for both displays to ensure clean reporting
+        diff_seen = set()
         unique_diff_secrets = []
         
         for secret in diff_secrets:
-            key = (secret.get('file_path', ''), secret.get('line_number', ''))
-            if key not in already_seen:
-                already_seen.add(key)
+            key = (secret.get('file_path', ''), secret.get('line_number', 0))
+            if key not in diff_seen:
+                diff_seen.add(key)
                 unique_diff_secrets.append(secret)
         
-        # For repository scan, use ALL repository secrets without filtering
-        # This provides a complete view of all secrets in the codebase
+        # For repository scan, deduplicate but keep all unique secrets
+        repo_seen = set()
+        unique_repo_secrets = []
         
-        # Use the deduplicated list for diff_secrets
+        for secret in repo_secrets:
+            key = (secret.get('file_path', ''), secret.get('line_number', 0))
+            if key not in repo_seen:
+                repo_seen.add(key)
+                unique_repo_secrets.append(secret)
+        
+        # Use the deduplicated lists
         diff_secrets = unique_diff_secrets
+        repo_secrets = unique_repo_secrets
+        
+        logging.info(f"After deduplication: {len(diff_secrets)} unique diff secrets and {len(repo_secrets)} unique repo secrets")
         
         git_metadata = get_git_metadata()
         
         # Generate table rows for diff scan results
         diff_secrets_table_rows = generate_table_rows(diff_secrets)
-        logging.info(f"Generated {len(diff_secrets)} diff secrets table rows")
+        logging.info(f"Generated table rows for {len(diff_secrets)} diff secrets")
 
-        # Generate table rows for repo scan results - use the full repo_secrets list
+        # Generate table rows for repo scan results
         repo_secrets_table_rows = generate_table_rows(repo_secrets)
-        logging.info(f"Generated {len(repo_secrets)} repo secrets table rows")
+        logging.info(f"Generated table rows for {len(repo_secrets)} repo secrets")
         
         # Empty disallowed files section
         disallowed_files_section = ""
@@ -539,7 +568,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         
         if not template_path.exists():
             # If template doesn't exist, use a simple built-in template
-            logging.error(f"Template file not found at {template_path}, using built-in template")
+            logging.warning(f"Template file not found at {template_path}, using built-in template")
             html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata)
         else:
             try:
@@ -586,7 +615,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
             
-        logging.info(f"HTML report generated at {output_path}")
+        logging.info(f"HTML report successfully generated at {output_path} with {len(diff_secrets)} diff secrets and {len(repo_secrets)} repo secrets")
         return True
         
     except Exception as e:
@@ -800,6 +829,19 @@ def main() -> None:
         except Exception as e:
             logging.error(f"Error scanning files to be pushed: {e}")
             sys.exit(1)
+    
+    # Combine diff_results with repo_results to ensure all secrets are included in the repository section
+    # Use a set to track which secrets we've already added to avoid duplicates
+    seen_secrets = {(s.get('file_path', ''), s.get('line_number', 0)) for s in repo_results}
+    
+    # Add any diff secrets that aren't already in the repo secrets
+    for secret in diff_results:
+        key = (secret.get('file_path', ''), secret.get('line_number', 0))
+        if key not in seen_secrets:
+            repo_results.append(secret)
+            seen_secrets.add(key)
+    
+    logging.info(f"Combined repository scan now includes {len(repo_results)} unique secrets")
     
     # Generate HTML report
     try:
