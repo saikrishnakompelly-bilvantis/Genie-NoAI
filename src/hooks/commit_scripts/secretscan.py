@@ -443,8 +443,22 @@ class SecretScanner:
                     
                 files_to_scan.append(file_path)
             
-            # Scan filtered files
-            return self.scan_files(files_to_scan)
+            # Reset found secrets list before starting scan
+            self.found_secrets = []
+            
+            # Scan each file and accumulate results
+            for file_path in files_to_scan:
+                if os.path.exists(file_path):
+                    self.logger.info(f"Scanning file: {file_path}")
+                    file_secrets = self.scan_file(file_path)
+                    if file_secrets:
+                        self.logger.info(f"Found {len(file_secrets)} secrets in {file_path}")
+                        self.found_secrets.extend(file_secrets)
+                else:
+                    self.logger.warning(f"File does not exist: {file_path}")
+            
+            self.logger.info(f"Found {len(self.found_secrets)} potential secrets in repository")
+            return self.found_secrets
             
         except Exception as e:
             self.logger.error(f"Error scanning repository: {e}")
