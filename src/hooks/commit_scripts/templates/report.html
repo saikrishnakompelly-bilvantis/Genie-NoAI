@@ -35,6 +35,23 @@
             color: #333;
             margin-right: 5px;
         }}
+        .execution-time {{ 
+            background: {header_background}; 
+            padding: 10px 15px; 
+            border-radius: 5px; 
+            margin-top: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid {primary_color};
+        }}
+        .execution-time p {{ 
+            margin: 5px 0; 
+            color: #666;
+            font-size: 14px;
+        }}
+        .execution-time strong {{ 
+            color: #333;
+            margin-right: 5px;
+        }}
         table {{ 
             width: 100%; 
             border-collapse: collapse; margin-top: 20px;
@@ -130,6 +147,10 @@
             <p><strong>Commit Hash:</strong> {git_metadata[commit_hash]}</p>
             <p><strong>Timestamp:</strong> {git_metadata[timestamp]}</p>
         </div>
+        
+        <!-- Execution time will be added dynamically -->
+        <div id="execution-time-placeholder"></div>
+        
         {disallowed_files_section}
 
         <div class="tab-container">

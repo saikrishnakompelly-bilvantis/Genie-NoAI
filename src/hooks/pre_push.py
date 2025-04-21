@@ -728,7 +728,7 @@ def append_justification_to_commit(validation_results):
         logging.error(f"Failed to append justification to commit message: {e}")
         return False
 
-def generate_and_open_report(secrets_found):
+def generate_and_open_report(secrets_found, elapsed_time=None):
     try:
         reports_dir = SCRIPT_DIR / ".push-reports"
         reports_dir.mkdir(exist_ok=True)
@@ -748,7 +748,8 @@ def generate_and_open_report(secrets_found):
             str(output_path),
             diff_secrets=secrets_found,
             repo_secrets=repo_secrets,  # This now contains ALL repo secrets
-            has_secrets=bool(secrets_found or repo_secrets)
+            has_secrets=bool(secrets_found or repo_secrets),
+            elapsed_time=elapsed_time  # Pass the elapsed time to the HTML generator
         )
         
         if not success:
@@ -789,6 +790,21 @@ def generate_and_open_report(secrets_found):
                 # If no style tag found, add it after the title
                 html_content = html_content.replace("</title>", "</title>\n" + fixed_table_css)
             
+            # Add execution time display after the header info
+            if elapsed_time is not None:
+                minutes = int(elapsed_time // 60)
+                seconds = int(elapsed_time % 60)
+                time_display = f"{minutes}m {seconds}s"
+                
+                time_info_html = f"""
+                <div class="execution-time">
+                    <p><strong>Execution Time:</strong> {time_display}</p>
+                </div>
+                """
+                
+                # Insert the execution time after the header-info div
+                html_content = html_content.replace("</div>\n        {disallowed_files_section}", f"</div>\n        {time_info_html}\n        {{disallowed_files_section}}")
+            
             # Write the modified content back
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -807,6 +823,9 @@ def generate_and_open_report(secrets_found):
  
 def main():
     try:
+        # Start the timer for hook execution
+        start_time = time.time()
+        
         check_python()
         check_git()
         
@@ -851,7 +870,14 @@ def main():
             save_metadata({}, [])
             logging.info("No secrets found in pushed files")
         
-        generate_and_open_report(secrets_data)
+        # Calculate elapsed time before generating the report
+        elapsed_time = time.time() - start_time
+        minutes = int(elapsed_time // 60)
+        seconds = int(elapsed_time % 60)
+        time_display = f"{minutes}m {seconds}s"
+        logging.info(f"Pre-push hook execution time: {time_display}")
+        
+        generate_and_open_report(secrets_data, elapsed_time)
         
         save_current_commit_as_pushed()
             
