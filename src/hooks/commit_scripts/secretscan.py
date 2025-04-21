@@ -638,10 +638,12 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
     
     # Format execution time if provided
     execution_time_html = ""
+    time_display = ""
     if elapsed_time is not None:
         minutes = int(elapsed_time // 60)
         seconds = int(elapsed_time % 60)
-        time_display = f"{minutes}m {seconds}s"
+        milliseconds = int((elapsed_time % 1) * 1000)
+        time_display = f"{minutes}m {seconds}s {milliseconds}ms"
         execution_time_html = f"""
         <div class="execution-time" style="background: #f1f8ff; padding: 10px 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid #0056b3;">
             <p style="margin: 5px 0; color: #333;"><strong>Execution Time:</strong> {time_display}</p>
@@ -761,6 +763,24 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
             // Add active class to the clicked button
             event.target.classList.add('active');
         }}
+
+        // Print setup - show both tabs when printing
+        window.onbeforeprint = function() {{
+            document.querySelectorAll('.tab-content').forEach(tab => {{
+                tab.style.display = 'block';
+            }});
+        }};
+        
+        window.onafterprint = function() {{
+            // Restore tab visibility after printing
+            document.querySelectorAll('.tab-content').forEach(tab => {{
+                if (tab.classList.contains('active')) {{
+                    tab.style.display = 'block';
+                }} else {{
+                    tab.style.display = 'none';
+                }}
+            }});
+        }};
     </script>
 </body>
 </html>

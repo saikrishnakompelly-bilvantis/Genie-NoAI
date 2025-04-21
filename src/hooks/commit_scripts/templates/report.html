@@ -202,6 +202,13 @@
     }
 
     document.getElementById("downloadButton").addEventListener("click", () => {
+        // Temporarily show both tabs for PDF generation
+        const originalTabVisibility = {};
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            originalTabVisibility[tab.id] = tab.style.display;
+            tab.style.display = 'block';
+        });
+        
         // Get diff scan secrets
         const diffSecretsTable = document.getElementById("diffSecretsTable");
         const diffSecretRows = diffSecretsTable.querySelectorAll("tr:not(:first-child)");
@@ -228,6 +235,13 @@
             };
         });
 
+        // Get execution time if available
+        let executionTime = "";
+        const executionTimeEl = document.querySelector('.execution-time p');
+        if (executionTimeEl) {
+            executionTime = executionTimeEl.innerText;
+        }
+
         // Create file name using current date
         const currentDate = new Date();
         const formattedDate = currentDate.toLocaleDateString('en-GB', {
@@ -245,6 +259,7 @@
                 { text: `Branch: {git_metadata[branch]}`, style: 'info' },
                 { text: `Commit Hash: {git_metadata[commit_hash]}`, style: 'info' },
                 { text: `Timestamp: {git_metadata[timestamp]}`, style: 'info' },
+                executionTime ? { text: executionTime, style: 'info', margin: [0, 2, 0, 10] } : null,
                 
                 // Diff Scan Section
                 { text: 'Diff Scan - Potential Secrets Found:', style: 'subheader' },
@@ -271,7 +286,7 @@
                 },
 
                 // Repo Scan Section
-                { text: 'Repository Scan - Potential Secrets Found:', style: 'subheader' },
+                { text: 'Repository Scan - Potential Secrets Found:', style: 'subheader', pageBreak: 'before' },
                 {
                     table: {
                         headerRows: 1,
@@ -292,7 +307,7 @@
                         ]
                     }
                 }
-            ],
+            ].filter(Boolean),
             styles: {
                 header: {
                     fontSize: 18,
@@ -314,6 +329,12 @@
 
         // Generate and download the PDF
         pdfMake.createPdf(docDefinition).download(fileName);
+        
+        // Restore original tab visibility
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.style.display = originalTabVisibility[tab.id] || '';
+        });
+        showTab(document.querySelector('.tab-button.active').getAttribute('onclick').match(/'([^']+)'/)[1]);
     });
     </script>
 </body>

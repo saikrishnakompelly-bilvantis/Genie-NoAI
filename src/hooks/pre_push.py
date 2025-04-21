@@ -728,7 +728,7 @@ def append_justification_to_commit(validation_results):
         logging.error(f"Failed to append justification to commit message: {e}")
         return False
 
-def generate_and_open_report(secrets_found, elapsed_time=None):
+def generate_and_open_report(secrets_found, start_time=None):
     try:
         reports_dir = SCRIPT_DIR / ".push-reports"
         reports_dir.mkdir(exist_ok=True)
@@ -742,6 +742,16 @@ def generate_and_open_report(secrets_found, elapsed_time=None):
         # This ensures the "Repository Secrets" tab shows ALL secrets in the repo
         
         output_path = reports_dir / "scan-report.html"
+        
+        # Calculate elapsed time including repo scan
+        elapsed_time = None
+        if start_time is not None:
+            elapsed_time = time.time() - start_time
+            minutes = int(elapsed_time // 60)
+            seconds = int(elapsed_time % 60)
+            milliseconds = int((elapsed_time % 1) * 1000)
+            time_display = f"{minutes}m {seconds}s {milliseconds}ms"
+            logging.info(f"Total hook execution time (including repository scan): {time_display}")
         
         # Generate the report, passing repo_secrets directly
         success = generate_html_report(
@@ -794,7 +804,8 @@ def generate_and_open_report(secrets_found, elapsed_time=None):
             if elapsed_time is not None:
                 minutes = int(elapsed_time // 60)
                 seconds = int(elapsed_time % 60)
-                time_display = f"{minutes}m {seconds}s"
+                milliseconds = int((elapsed_time % 1) * 1000)
+                time_display = f"{minutes}m {seconds}s {milliseconds}ms"
                 
                 time_info_html = f"""
                 <div class="execution-time">
@@ -870,14 +881,8 @@ def main():
             save_metadata({}, [])
             logging.info("No secrets found in pushed files")
         
-        # Calculate elapsed time before generating the report
-        elapsed_time = time.time() - start_time
-        minutes = int(elapsed_time // 60)
-        seconds = int(elapsed_time % 60)
-        time_display = f"{minutes}m {seconds}s"
-        logging.info(f"Pre-push hook execution time: {time_display}")
-        
-        generate_and_open_report(secrets_data, elapsed_time)
+        # Pass the start time to the report generation function instead of calculating elapsed time here
+        generate_and_open_report(secrets_data, start_time)
         
         save_current_commit_as_pushed()
             
