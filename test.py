@@ -1,21 +1,3 @@
-sample_text = "This is a sample text"
-
-print(sample_text)
-
-sample_text = "This is a sample text"
-
-print(sample_text)sample_text = "This is a sample text"
-
-print(sample_text)
-
-print(sample_text)
-
-sample_text = "This is a sample text"
-
-print(sample_text)sample_text = "This is a sample text"
-
-print(sample_text)
-
 #!/usr/bin/env python3
 """Test file containing various dummy secrets for testing secret scanning functionality."""
 
