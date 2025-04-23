@@ -505,7 +505,6 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
     try:
         diff_secrets = kwargs.get('diff_secrets', [])
         repo_secrets = kwargs.get('repo_secrets', [])
-        elapsed_time = kwargs.get('elapsed_time', None)
         
         # Enhanced logging to show exact counts and details
         logging.info(f"Generating HTML report with {len(diff_secrets)} diff secrets and {len(repo_secrets)} repo secrets")
@@ -572,7 +571,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         if not template_path.exists():
             # If template doesn't exist, use a simple built-in template
             logging.warning(f"Template file not found at {template_path}, using built-in template")
-            html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapsed_time)
+            html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata)
         else:
             try:
                 # Read and fix the template
@@ -607,7 +606,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
             except (KeyError, ValueError) as e:
                 # If template formatting fails, fall back to simple report
                 logging.error(f"Error formatting template: {e}, falling back to simple template")
-                html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapsed_time)
+                html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata)
 
         # Ensure output directory exists
         output_dir = os.path.dirname(output_path)
@@ -625,7 +624,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         logging.error(f"Error generating HTML report: {e}", exc_info=True)
         return False
 
-def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapsed_time=None):
+def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
     """Generate a simple HTML report without relying on a template file."""
     # Format git metadata values safely
     safe_metadata = {
@@ -635,20 +634,6 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
         'commit_hash': html.escape(git_metadata.get('commit_hash', 'Unknown')),
         'timestamp': html.escape(git_metadata.get('timestamp', 'Unknown'))
     }
-    
-    # Format execution time if provided
-    execution_time_html = ""
-    time_display = ""
-    if elapsed_time is not None:
-        minutes = int(elapsed_time // 60)
-        seconds = int(elapsed_time % 60)
-        milliseconds = int((elapsed_time % 1) * 1000)
-        time_display = f"{minutes}m {seconds}s {milliseconds}ms"
-        execution_time_html = f"""
-        <div class="execution-time" style="background: #f1f8ff; padding: 10px 15px; border-radius: 5px; margin-top: 10px; margin-bottom: 20px; border-left: 4px solid #0056b3;">
-            <p style="margin: 5px 0; color: #333;"><strong>Execution Time:</strong> {time_display}</p>
-        </div>
-        """
     
     # Generate table rows for diff secrets and repo secrets
     diff_secrets_table_rows = generate_table_rows(diff_secrets)
@@ -664,8 +649,8 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
         .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
         h1, h2 {{ color: #0056b3; }}
         .header-info {{ background: #f1f8ff; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #0056b3; }}
-        .header-info p, .execution-time p {{ margin: 5px 0; color: #666; }}
-        .header-info strong, .execution-time strong {{ color: #333; margin-right: 5px; }}
+        .header-info p {{ margin: 5px 0; color: #666; }}
+        .header-info strong {{ color: #333; margin-right: 5px; }}
         table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
         th, td {{ padding: 12px; text-align: left; border: 1px solid #ddd; }}
         th {{ background: #0056b3; color: white; }}
@@ -710,8 +695,6 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
             <p><strong>Commit Hash:</strong> {commit_hash}</p>
             <p><strong>Timestamp:</strong> {timestamp}</p>
         </div>
-
-        {execution_time}
 
         <div class="tab-container">
             <div class="tab-buttons">
@@ -763,7 +746,7 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
             // Add active class to the clicked button
             event.target.classList.add('active');
         }}
-
+        
         // Print setup - show both tabs when printing
         window.onbeforeprint = function() {{
             document.querySelectorAll('.tab-content').forEach(tab => {{
@@ -783,8 +766,10 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
         }};
     </script>
 </body>
-</html>
-""".format(
+</html>"""
+
+    # Replace placeholders with actual values
+    formatted_html = html_content.format(
         author=safe_metadata['author'],
         repo_name=safe_metadata['repo_name'],
         branch=safe_metadata['branch'],
@@ -792,12 +777,11 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata, elapse
         timestamp=safe_metadata['timestamp'],
         diff_secrets_count=len(diff_secrets),
         repo_secrets_count=len(repo_secrets),
-        diff_secrets_rows=diff_secrets_table_rows or "<tr><td colspan='4' style='text-align:center'>No secrets found</td></tr>",
-        repo_secrets_rows=repo_secrets_table_rows or "<tr><td colspan='4' style='text-align:center'>No secrets found</td></tr>",
-        execution_time=execution_time_html
+        diff_secrets_rows=diff_secrets_table_rows or "<tr><td colspan='4'>No secrets found in files to be pushed</td></tr>",
+        repo_secrets_rows=repo_secrets_table_rows or "<tr><td colspan='4'>No secrets found in repository scan</td></tr>"
     )
     
-    return html_content
+    return formatted_html
 
 def generate_table_rows(secrets):
     """Generate HTML table rows for secrets."""

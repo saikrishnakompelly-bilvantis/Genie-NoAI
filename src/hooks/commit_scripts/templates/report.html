@@ -35,23 +35,6 @@
             color: #333;
             margin-right: 5px;
         }}
-        .execution-time {{ 
-            background: {header_background}; 
-            padding: 10px 15px; 
-            border-radius: 5px; 
-            margin-top: 10px;
-            margin-bottom: 20px;
-            border-left: 4px solid {primary_color};
-        }}
-        .execution-time p {{ 
-            margin: 5px 0; 
-            color: #666;
-            font-size: 14px;
-        }}
-        .execution-time strong {{ 
-            color: #333;
-            margin-right: 5px;
-        }}
         table {{ 
             width: 100%; 
             border-collapse: collapse; margin-top: 20px;
@@ -147,10 +130,6 @@
             <p><strong>Commit Hash:</strong> {git_metadata[commit_hash]}</p>
             <p><strong>Timestamp:</strong> {git_metadata[timestamp]}</p>
         </div>
-        
-        <!-- Execution time will be added dynamically -->
-        <div id="execution-time-placeholder"></div>
-        
         {disallowed_files_section}
 
         <div class="tab-container">
@@ -202,13 +181,6 @@
     }
 
     document.getElementById("downloadButton").addEventListener("click", () => {
-        // Temporarily show both tabs for PDF generation
-        const originalTabVisibility = {};
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            originalTabVisibility[tab.id] = tab.style.display;
-            tab.style.display = 'block';
-        });
-        
         // Get diff scan secrets
         const diffSecretsTable = document.getElementById("diffSecretsTable");
         const diffSecretRows = diffSecretsTable.querySelectorAll("tr:not(:first-child)");
@@ -235,13 +207,6 @@
             };
         });
 
-        // Get execution time if available
-        let executionTime = "";
-        const executionTimeEl = document.querySelector('.execution-time p');
-        if (executionTimeEl) {
-            executionTime = executionTimeEl.innerText;
-        }
-
         // Create file name using current date
         const currentDate = new Date();
         const formattedDate = currentDate.toLocaleDateString('en-GB', {
@@ -259,7 +224,6 @@
                 { text: `Branch: {git_metadata[branch]}`, style: 'info' },
                 { text: `Commit Hash: {git_metadata[commit_hash]}`, style: 'info' },
                 { text: `Timestamp: {git_metadata[timestamp]}`, style: 'info' },
-                executionTime ? { text: executionTime, style: 'info', margin: [0, 2, 0, 10] } : null,
                 
                 // Diff Scan Section
                 { text: 'Diff Scan - Potential Secrets Found:', style: 'subheader' },
@@ -286,7 +250,7 @@
                 },
 
                 // Repo Scan Section
-                { text: 'Repository Scan - Potential Secrets Found:', style: 'subheader', pageBreak: 'before' },
+                { text: 'Repository Scan - Potential Secrets Found:', style: 'subheader' },
                 {
                     table: {
                         headerRows: 1,
@@ -307,7 +271,7 @@
                         ]
                     }
                 }
-            ].filter(Boolean),
+            ],
             styles: {
                 header: {
                     fontSize: 18,
@@ -329,12 +293,6 @@
 
         // Generate and download the PDF
         pdfMake.createPdf(docDefinition).download(fileName);
-        
-        // Restore original tab visibility
-        document.querySelectorAll('.tab-content').forEach(tab => {
-            tab.style.display = originalTabVisibility[tab.id] || '';
-        });
-        showTab(document.querySelector('.tab-button.active').getAttribute('onclick').match(/'([^']+)'/)[1]);
     });
     </script>
 </body>
