@@ -62,6 +62,3 @@ class SecretManager:
             "secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         }
 
-if __name__ == "__main__":
-    print("This file contains various dummy secrets for testing purposes only.")
-    print("DO NOT use any of these credentials in production environments!") 
