@@ -1,13 +1,3 @@
-#!/usr/bin/env python3
-"""Test file containing various dummy secrets for testing secret scanning functionality."""
-
-# API Keys
-api_key = "AIzaSyDz7drSCB-xylInKA4xGLg4A1UZbmfcZkM"
-aws_secret = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-
-# Database credentials
-DB_USERNAME = "admin"
-DB_PASSWORD = "super_secure_password123"
 
 # OAuth tokens
 OAUTH_TOKEN = "gho_16C7e42F292c6912E7710c838347Ae178B4a"
