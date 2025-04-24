@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_SCRIPT="$SCRIPT_DIR/commit_scripts/scan_config.py"
+
+# Check if the script exists, show error only if it doesn't exist
+if [ ! -f "$CONFIG_SCRIPT" ]; then
+    echo "Error: Configuration script not found at: $CONFIG_SCRIPT"
+    exit 1
+fi
+
+# Run the scan_config.py script using the system's Python interpreter
+# Redirect stderr to /dev/null to suppress macOS IMK messages
+python3 "$CONFIG_SCRIPT" "$@" 2>/dev/null
+EXIT_CODE=$?
+
+# Only show message on error
+if [ $EXIT_CODE -ne 0 ]; then
+    echo "Error launching configuration tool. Exit code: $EXIT_CODE"
+fi
+
+exit $EXIT_CODE 

@@ -23,6 +23,14 @@ sys.path.append(str(SCRIPT_DIR))
 from commit_scripts.secretscan import SecretScanner
 from commit_scripts.utils import mask_secret
 from commit_scripts.secretscan import generate_html_report
+try:
+    from commit_scripts.scan_config import should_scan_diff, should_scan_repo
+except ImportError:
+    # If scan_config is not available, default to scanning both
+    def should_scan_diff():
+        return True
+    def should_scan_repo():
+        return True
 
 # Helper function for subprocess calls to prevent terminal windows
 def run_subprocess(cmd, **kwargs):
@@ -735,20 +743,30 @@ def generate_and_open_report(secrets_found):
         
         scanner = SecretScanner()
         
-        # Scan the entire repository for all secrets
-        repo_secrets = scanner.scan_repository()
+        # Scan the entire repository for all secrets only if enabled
+        repo_secrets = []
+        if should_scan_repo():
+            logging.info("Repository scan enabled, scanning entire repository")
+            repo_secrets = scanner.scan_repository()
+        else:
+            logging.info("Repository scan disabled in configuration")
         
-        # We're no longer combining pushed secrets with repo secrets 
-        # This ensures the "Repository Secrets" tab shows ALL secrets in the repo
+        # Check if diff scan is enabled
+        diff_secrets = []
+        if should_scan_diff():
+            logging.info("Diff scan enabled, using provided secrets_found")
+            diff_secrets = secrets_found
+        else:
+            logging.info("Diff scan disabled in configuration")
         
         output_path = reports_dir / "scan-report.html"
         
         # Generate the report, passing repo_secrets directly
         success = generate_html_report(
             str(output_path),
-            diff_secrets=secrets_found,
+            diff_secrets=diff_secrets,
             repo_secrets=repo_secrets,  # This now contains ALL repo secrets
-            has_secrets=bool(secrets_found or repo_secrets)
+            has_secrets=bool(diff_secrets or repo_secrets)
         )
         
         if not success:
@@ -831,7 +849,12 @@ def main():
         
         logging.info(f"Running pre-push hook for {len(pushed_files)} files")
         
-        secrets_data = run_secret_scan_on_pushed_files()
+        # Check scan configuration
+        secrets_data = []
+        if should_scan_diff():
+            secrets_data = run_secret_scan_on_pushed_files()
+        else:
+            logging.info("Diff scanning disabled in configuration, skipping")
         
         validation_results = {}
         

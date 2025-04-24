@@ -799,7 +799,7 @@ Categories=Utility;Development;
                 raise FileNotFoundError(f"Hooks source directory not found: {hooks_source}")
             
             # Copy hook files
-            hook_files = ['pre-push','pre_push.py']
+            hook_files = ['pre-push', 'pre_push.py', 'scan-config']
             for hook_file in hook_files:
                 source_file = hooks_source / hook_file
                 target_file = Path(hooks_dir) / hook_file
@@ -809,6 +809,12 @@ Categories=Utility;Development;
                     # Make the file executable
                     os.chmod(str(target_file), 0o755)
                     logging.info(f"Copied hook file: {source_file} -> {target_file}")
+                    
+                    # Verify the file is executable after permission change
+                    if os.access(str(target_file), os.X_OK):
+                        logging.info(f"Verified {hook_file} is executable")
+                    else:
+                        logging.warning(f"Failed to make {hook_file} executable!")
                 else:
                     raise FileNotFoundError(f"Hook file not found: {source_file}")
             
@@ -829,6 +835,8 @@ Categories=Utility;Development;
                                 check=False)  # Don't check as it might not exist
                     run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                                 check=False)  # Don't check as it might not exist
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
+                                check=False)  # Don't check as it might not exist
                     
                     # Set up new Git hooks configuration
                     run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
@@ -837,8 +845,39 @@ Categories=Utility;Development;
                     # Create git alias for scan-repo with absolute path
                     scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
                     alias_cmd = f'!bash "{scan_repo_path}"'
-                    run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
-                                check=True)
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("scan-repo alias verified successfully")
+                        else:
+                            logging.warning(f"scan-repo alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set scan-repo alias: {e}")
+                        # Continue with installation, as this is not critical
+                    
+                    # Create git alias for scan-config with absolute path
+                    scan_config_path = os.path.join(hooks_dir, 'scan-config')
+                    # Use the full command with bash to ensure the script is executed correctly
+                    alias_cmd = f'!bash "{scan_config_path}"'
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.scan-config', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("scan-config alias verified successfully")
+                        else:
+                            logging.warning(f"scan-config alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set scan-config alias: {e}")
+                        # Continue with installation, as this is not critical
                 else:
                     # macOS/Linux code without creationflags
                     # Remove any existing Git hooks configuration
@@ -846,6 +885,8 @@ Categories=Utility;Development;
                                 check=False)  # Don't check as it might not exist
                     run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                                 check=False)  # Don't check as it might not exist
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
+                                check=False)  # Don't check as it might not exist
                     
                     # Set up new Git hooks configuration
                     run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
@@ -854,14 +895,80 @@ Categories=Utility;Development;
                     # Create git alias for scan-repo with absolute path
                     scan_repo_path = os.path.join(hooks_dir, 'scan-repo')
                     alias_cmd = f'!bash "{scan_repo_path}"'
-                    run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
-                                check=True)
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.scan-repo', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("scan-repo alias verified successfully")
+                        else:
+                            logging.warning(f"scan-repo alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set scan-repo alias: {e}")
+                        # Continue with installation, as this is not critical
+                    
+                    # Create git alias for scan-config with absolute path
+                    scan_config_path = os.path.join(hooks_dir, 'scan-config')
+                    # Use the full command with bash to ensure the script is executed correctly
+                    alias_cmd = f'!bash "{scan_config_path}"'
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.scan-config', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("scan-config alias verified successfully")
+                        else:
+                            logging.warning(f"scan-config alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set scan-config alias: {e}")
+                        # Continue with installation, as this is not critical
                 
                 # Create a config file to store the hooks directory path and installation status
                 config_file = os.path.join(genie_dir, 'config')
                 with open(config_file, 'w') as f:
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
+                
+                # Create executable scripts in user's bin directory for better Git integration
+                try:
+                    # Create an additional script in user's bin directory for direct git command
+                    user_bin_dir = os.path.expanduser('~/bin')
+                    if not os.path.exists(user_bin_dir):
+                        os.makedirs(user_bin_dir, exist_ok=True)
+                        
+                    # Check if user's bin is in PATH, if not suggest adding it
+                    path_env = os.environ.get('PATH', '')
+                    if user_bin_dir not in path_env.split(os.pathsep):
+                        logging.warning(f"{user_bin_dir} is not in PATH. Consider adding it for better Git integration.")
+                    
+                    # Create git-scan-config script (Git looks for git-* executables in PATH)
+                    git_scan_config_path = os.path.join(user_bin_dir, 'git-scan-config')
+                    with open(git_scan_config_path, 'w') as f:
+                        f.write(f"""#!/bin/bash
+# Generated by Genie installer
+exec bash "{os.path.join(hooks_dir, 'scan-config')}" "$@"
+""")
+                    os.chmod(git_scan_config_path, 0o755)
+                    logging.info(f"Created git-scan-config in {user_bin_dir}")
+                    
+                    # Create git-scan-repo script
+                    git_scan_repo_path = os.path.join(user_bin_dir, 'git-scan-repo')
+                    with open(git_scan_repo_path, 'w') as f:
+                        f.write(f"""#!/bin/bash
+# Generated by Genie installer
+exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
+""")
+                    os.chmod(git_scan_repo_path, 0o755)
+                    logging.info(f"Created git-scan-repo in {user_bin_dir}")
+                    
+                except Exception as e:
+                    logging.warning(f"Could not create user bin scripts: {e}. Alias-based commands will still work.")
                 
                 # Record installation in CSV and push to GitHub
                 try:
@@ -916,12 +1023,18 @@ Categories=Utility;Development;
                 
                 run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
                             check=False)  # Don't check as it might not exist
+                
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
+                            check=False)  # Don't check as it might not exist
             else:
                 # Non-Windows platforms don't have creationflags
                 run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
                             check=False)  # Don't check as it might not exist
                 
                 run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
+                            check=False)  # Don't check as it might not exist
+                
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
                             check=False)  # Don't check as it might not exist
             
             # Record uninstallation before removing the directory
@@ -932,6 +1045,24 @@ Categories=Utility;Development;
                 logging.info("Uninstallation recorded in tracking CSV")
             except Exception as e:
                 logging.warning(f"Could not record uninstallation: {e}")
+            
+            # Clean up scripts in user's bin directory
+            try:
+                user_bin_dir = os.path.expanduser('~/bin')
+                git_scan_config_path = os.path.join(user_bin_dir, 'git-scan-config')
+                git_scan_repo_path = os.path.join(user_bin_dir, 'git-scan-repo')
+                
+                # Remove git-scan-config if it exists
+                if os.path.exists(git_scan_config_path):
+                    os.remove(git_scan_config_path)
+                    logging.info(f"Removed {git_scan_config_path}")
+                
+                # Remove git-scan-repo if it exists
+                if os.path.exists(git_scan_repo_path):
+                    os.remove(git_scan_repo_path)
+                    logging.info(f"Removed {git_scan_repo_path}")
+            except Exception as e:
+                logging.warning(f"Could not clean up user bin scripts: {e}")
             
             # Remove .genie directory completely
             genie_dir = os.path.expanduser('~/.genie')
@@ -951,6 +1082,10 @@ Categories=Utility;Development;
                 scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
                                             capture_output=True, 
                                             text=True).stdout.strip()
+                
+                scan_config_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
+                                             capture_output=True, 
+                                             text=True).stdout.strip()
             else:
                 hooks_path = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
                                         capture_output=True, 
@@ -959,12 +1094,19 @@ Categories=Utility;Development;
                 scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
                                             capture_output=True, 
                                             text=True).stdout.strip()
+                
+                scan_config_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
+                                             capture_output=True, 
+                                             text=True).stdout.strip()
             
             if hooks_path:
                 raise Exception("Git hooks path still set")
                 
             if scan_repo_alias:
                 raise Exception("Git scan-repo alias still set")
+                
+            if scan_config_alias:
+                raise Exception("Git scan-config alias still set")
             
             # Handle success based on UI mode
             if self.is_restricted_env:
