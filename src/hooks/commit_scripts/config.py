@@ -4,7 +4,7 @@ from typing import List, Tuple, Dict
 
 # Entropy thresholds for different types of secrets
 ENTROPY_THRESHOLDS = {
-    'password': 3.0,      # Lower threshold for passwords
+    'password': 4.0,      # Lower threshold for passwords
     'api_key': 4.5,       # Higher for API keys
     'token': 4.0,         # Medium for tokens
     'secret': 4.0,        # Medium for generic secrets
@@ -33,9 +33,9 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     (r'eyJ[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}', 'JWT Token', {'require_entropy': False}),
     
     # Passwords - Lower entropy requirement
-    (r'(?i)password[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 6, 'require_entropy': True, 'threshold': 3.0}),
-    (r'(?i)pass[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 6, 'require_entropy': True, 'threshold': 3.0}),
-    (r'(?i)pwd[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 6, 'require_entropy': True, 'threshold': 3.0}),
+    (r'(?i)password[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    (r'(?i)pass[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    (r'(?i)pwd[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
     
     # Generic Secrets - Medium entropy requirement
     (r'(?i)(secret|token|credential)[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Generic Secret', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
