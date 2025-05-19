@@ -14,7 +14,8 @@ from datetime import datetime
 import html
 from .config import (
     PATTERNS, HTML_CONFIG,
-    EXCLUDED_EXTENSIONS, EXCLUDED_DIRECTORIES, ENTROPY_THRESHOLDS
+    EXCLUDED_EXTENSIONS, EXCLUDED_DIRECTORIES, ENTROPY_THRESHOLDS,
+    should_exclude_file
 )
 from .utils import (
     setup_logging, get_git_metadata,
@@ -201,6 +202,11 @@ class SecretScanner:
     def scan_file(self, file_path: str) -> List[Dict[str, Union[str, int]]]:
         """Scan a single file for potential secrets."""
         try:
+            # Check if the file should be excluded based on the new exclusion rules
+            if should_exclude_file(file_path):
+                self.logger.debug(f"Skipping excluded file: {file_path}")
+                return []
+                
             self.logger.debug(f"Starting scan of file: {file_path}")
             
             # Read file content
@@ -248,90 +254,75 @@ class SecretScanner:
                 files_to_push = result.stdout.strip().split('\n')
                 files_to_push = [f for f in files_to_push if f]  # Remove empty strings
                 
-                if not files_to_push:
-                    # Try getting files that have changed between local and upstream
-                    try:
-                        cmd = ['git', 'diff', '--name-only', '@{u}..']
-                        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                        files_to_push = result.stdout.strip().split('\n')
-                        files_to_push = [f for f in files_to_push if f]
-                    except subprocess.CalledProcessError:
-                        # No upstream branch or other issue, fallback to all tracked files
-                        pass
-                        
-                    if not files_to_push:
-                        self.logger.info("No files to push found.")
-                        return []
+            self.logger.info(f"Scanning {len(files_to_push)} files to be pushed")
             
-            # Scan all files that will be pushed
-            self.logger.info(f"Scanning {len(files_to_push)} files for secrets")
-            
-            # Reset found secrets list before starting scan
-            self.found_secrets = []
-            
-            # Scan each file in its entirety
+            # Filter out excluded file types and directories
+            filtered_files = []
             for file_path in files_to_push:
-                if os.path.exists(file_path):
-                    file_secrets = self.scan_file(file_path)
-                    if file_secrets:
-                        self.found_secrets.extend(file_secrets)
+                # Skip files that should be excluded
+                if should_exclude_file(file_path):
+                    self.logger.debug(f"Skipping excluded file: {file_path}")
+                    continue
+                filtered_files.append(file_path)
             
-            # Only log a summary at the end
-            if self.found_secrets:
-                self.logger.info(f"Found {len(self.found_secrets)} potential secrets in files to be pushed")
-            else:
-                self.logger.info("No secrets found in files to be pushed")
-                
+            self.logger.info(f"After filtering, scanning {len(filtered_files)} files")
+            
+            # Scan files
+            for file_path in filtered_files:
+                file_secrets = self.scan_file(file_path)
+                if file_secrets:
+                    self.found_secrets.extend(file_secrets)
+                    
             return self.found_secrets
-            
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Error running git command: {e}")
-            return []
         except Exception as e:
-            self.logger.error(f"Unexpected error during scan of files to be pushed: {e}", exc_info=True)
+            self.logger.error(f"Error scanning files to push: {e}")
             return []
-
+    
     def scan_files(self, files_list: List[str]) -> List[Dict[str, Any]]:
-        """Scan a list of specific files for secrets."""
-        try:
-            if not files_list:
-                self.logger.info("No files provided to scan.")
-                return []
-            
-            # Scan all files in the provided list
-            self.logger.info(f"Scanning {len(files_list)} specified files for secrets")
-            
-            # Reset found secrets list before starting scan
-            self.found_secrets = []
-            
-            # Scan each file in its entirety
-            for file_path in files_list:
-                if os.path.exists(file_path):
-                    file_secrets = self.scan_file(file_path)
-                    if file_secrets:
-                        self.found_secrets.extend(file_secrets)
-            
-            # Only log a summary at the end
-            if self.found_secrets:
-                self.logger.info(f"Found {len(self.found_secrets)} potential secrets in specified files")
-            else:
-                self.logger.info("No secrets found in specified files")
-                
-            return self.found_secrets
-            
-        except Exception as e:
-            self.logger.error(f"Unexpected error during scan of specified files: {e}", exc_info=True)
+        """Scan a list of files for secrets."""
+        if not files_list:
+            self.logger.info("No files to scan")
             return []
-
+        
+        self.logger.info(f"Scanning {len(files_list)} files")
+        
+        # Filter out excluded file types and directories
+        filtered_files = []
+        for file_path in files_list:
+            # Skip files that should be excluded
+            if should_exclude_file(file_path):
+                self.logger.debug(f"Skipping excluded file: {file_path}")
+                continue
+            filtered_files.append(file_path)
+        
+        self.logger.info(f"After filtering, scanning {len(filtered_files)} files")
+        
+        # Scan files
+        for file_path in filtered_files:
+            file_secrets = self.scan_file(file_path)
+            if file_secrets:
+                self.found_secrets.extend(file_secrets)
+                
+        return self.found_secrets
+    
     def scan_line(self, file_path: str, line_number: int, line: str) -> None:
-        """Scan a single line for secrets."""
-        # Check if we've already found a secret at this file:line
+        """Scan a single line for potential secrets."""
         file_line_key = (file_path, line_number)
         if file_line_key in self._seen_file_lines:
             return
         
-        # First pass: Check against defined patterns
+        # Check if the file should be excluded
+        if should_exclude_file(file_path):
+            self.logger.debug(f"Skipping excluded file line: {file_path}:{line_number}")
+            return
+        
+        found_secret = False
+        
+        # Check against defined patterns
         for pattern, secret_type, config in PATTERNS:
+            if found_secret:
+                break
+            
             matches = re.finditer(pattern, line)
             for match in matches:
                 value = match.group(0)
@@ -370,10 +361,13 @@ class SecretScanner:
                 self.found_secrets.append(secret)
                 self._seen_file_lines.add(file_line_key)
                 
-                # No individual logging for each secret
-                return  # Once we find a secret in this line, no need to check other patterns
+                found_secret = True
+                break
         
-        # Second pass: Variable name scanning
+        if found_secret:
+            return
+        
+        # Variable name scanning
         var_patterns = [
             r'(?i)(?:const|let|var|private|public|protected)?\s*(\w+)\s*[=:]\s*["\']([^"\']+)["\']',
             r'(?i)(\w+)\s*[=:]\s*["\']([^"\']+)["\']',
@@ -413,92 +407,95 @@ class SecretScanner:
                     }
                     self.found_secrets.append(secret)
                     self._seen_file_lines.add(file_line_key)
-                    
-                    # No individual logging for each secret
-                    return  # Once we find a secret, no need to check other patterns
-
+                    break
+            
+            if file_line_key in self._seen_file_lines:
+                break
+    
     def scan_repository(self) -> List[Dict[str, Union[str, int]]]:
         """Scan the entire repository for secrets."""
-        self.logger.info("Starting repository scan...")
-        
         try:
+            self.logger.info("Starting repository scan")
+            
             # Get all tracked files
             cmd = ['git', 'ls-files']
+            
             result = run_subprocess(cmd, capture_output=True, text=True, check=True)
-            all_files = result.stdout.strip().split('\n')
-            self.logger.info(f"Found {len(all_files)} files in repository")
+            files = result.stdout.strip().split('\n')
+            files = [f for f in files if f]  # Remove empty strings
             
-            # Filter files
-            files_to_scan = []
-            skipped_files = 0
-            for file_path in all_files:
-                # Skip empty lines
-                if not file_path:
+            self.logger.info(f"Found {len(files)} tracked files in repository")
+            
+            # Filter out excluded file types and directories
+            filtered_files = []
+            for file_path in files:
+                # Skip files that should be excluded
+                if should_exclude_file(file_path):
+                    self.logger.debug(f"Skipping excluded file: {file_path}")
                     continue
+                filtered_files.append(file_path)
+            
+            self.logger.info(f"After filtering, scanning {len(filtered_files)} files")
+            
+            # Scan files
+            for file_path in filtered_files:
+                file_secrets = self.scan_file(file_path)
+                if file_secrets:
+                    self.found_secrets.extend(file_secrets)
                     
-                # Skip files with excluded extensions
-                _, ext = os.path.splitext(file_path)
-                if ext in EXCLUDED_EXTENSIONS:
-                    skipped_files += 1
-                    self.logger.debug(f"Skipping file with excluded extension: {file_path}")
-                    continue
-                    
-                # Skip files in excluded directories
-                if any(excluded_dir in file_path.split(os.path.sep) for excluded_dir in EXCLUDED_DIRECTORIES):
-                    skipped_files += 1
-                    self.logger.debug(f"Skipping file in excluded directory: {file_path}")
-                    continue
-                    
-                files_to_scan.append(file_path)
-            
-            self.logger.info(f"Scanning {len(files_to_scan)} files after filtering (skipped {skipped_files} files)")
-            
-            # Reset found_secrets list once before starting the entire repository scan
-            # This ensures we're starting with a clean list for this scan operation
-            self.found_secrets = []
-            
-            # Track total secrets found for debug purposes
-            total_secrets_found = 0
-            
-            # Scan each file and accumulate results in self.found_secrets
-            for file_path in files_to_scan:
-                if os.path.exists(file_path):
-                    try:
-                        # Log file being scanned at debug level
-                        self.logger.debug(f"Scanning file: {file_path}")
-                        
-                        # Get secrets for this file
-                        file_secrets = self.scan_file(file_path)
-                        
-                        # If secrets were found in this file, log them
-                        if file_secrets:
-                            num_secrets = len(file_secrets)
-                            total_secrets_found += num_secrets
-                            self.logger.info(f"Found {num_secrets} potential secrets in {file_path}")
-                            
-                            # Extend our found_secrets list with the new findings
-                            self.found_secrets.extend(file_secrets)
-                            
-                            # Log details of each secret at debug level
-                            for secret in file_secrets:
-                                self.logger.debug(f"Secret found - File: {secret.get('file_path')}, Line: {secret.get('line_number')}, Type: {secret.get('type')}")
-                    except Exception as e:
-                        self.logger.error(f"Error scanning file {file_path}: {e}")
-                        continue
-            
-            # Final summary log
-            if self.found_secrets:
-                self.logger.info(f"Found {len(self.found_secrets)} potential secrets in repository")
-                self.logger.debug(f"Total secrets found during scan: {total_secrets_found}, Final count: {len(self.found_secrets)}")
-            else:
-                self.logger.info("No secrets found in repository")
-            
-            # Return the accumulated list of all repository secrets
             return self.found_secrets
-            
         except Exception as e:
             self.logger.error(f"Error scanning repository: {e}")
             return []
+
+    def scan_changed_lines(self, files_list: List[str]) -> List[Dict[str, Any]]:
+        """Scan only the changed lines in files for secrets.
+        
+        This method uses git diff to identify only the changed lines in the files
+        and scans only those specific lines, rather than the entire file content.
+        """
+        if not files_list:
+            self.logger.info("No files to scan")
+            return []
+        
+        self.logger.info(f"Scanning changed lines in {len(files_list)} files")
+        
+        # Get git diff information to identify changed lines
+        changed_lines = get_git_diff()
+        
+        # If we couldn't get changed lines (not a git repo or other issue),
+        # fall back to scanning entire files
+        if not changed_lines:
+            self.logger.info("Could not determine changed lines, falling back to full file scan")
+            return self.scan_files(files_list)
+        
+        # Filter out excluded file types and directories
+        filtered_files = []
+        for file_path in files_list:
+            # Skip files that should be excluded
+            if should_exclude_file(file_path):
+                self.logger.debug(f"Skipping excluded file: {file_path}")
+                continue
+            filtered_files.append(file_path)
+        
+        self.logger.info(f"After filtering, scanning changed lines in {len(filtered_files)} files")
+        
+        # Scan only the changed lines in each file
+        for file_path in filtered_files:
+            # If the file is in our changed_lines dict, scan only those lines
+            if file_path in changed_lines:
+                print(f"-  Scanning {len(changed_lines[file_path])} changed lines in {file_path}")
+                for line_number, line_content in changed_lines[file_path]:
+                    self.scan_line(file_path, line_number, line_content)
+            else:
+                # If the file is not in changed_lines but still in our files list,
+                # it might be a new file - scan it completely
+                self.logger.debug(f"File {file_path} not found in diff, scanning entire file")
+                file_secrets = self.scan_file(file_path)
+                if file_secrets:
+                    self.found_secrets.extend(file_secrets)
+                    
+        return self.found_secrets
 
 def generate_html_report(output_path: str, **kwargs) -> bool:
     """Generate an HTML report with diff scan and repo scan results."""
@@ -605,7 +602,7 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
                 html_content = template.format(**format_args)
             except (KeyError, ValueError) as e:
                 # If template formatting fails, fall back to simple report
-                logging.error(f"Error formatting template: {e}, falling back to simple template")
+                # logging.error(f"Error formatting template: {e}, falling back to simple template")
                 html_content = generate_simple_html_report(diff_secrets, repo_secrets, git_metadata)
 
         # Ensure output directory exists

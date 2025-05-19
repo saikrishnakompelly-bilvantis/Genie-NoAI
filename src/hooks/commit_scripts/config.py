@@ -1,6 +1,30 @@
 """Configuration settings for secret scanning."""
 
-from typing import List, Tuple, Dict
+import os
+import sys
+from typing import List, Tuple, Dict, Set
+import yaml
+import fnmatch
+
+# Ensure the current directory is in the path for imports
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.append(script_dir)
+
+# Import scan_config if available
+try:
+    from scan_config import get_exclusion_patterns, load_exclusions
+except ImportError:
+    # Fallback functions if scan_config is not available
+    def get_exclusion_patterns():
+        return []
+    
+    def load_exclusions():
+        return {
+            "file_extensions": [],
+            "directories": [],
+            "additional_exclusions": []
+        }
 
 # Entropy thresholds for different types of secrets
 ENTROPY_THRESHOLDS = {
@@ -47,21 +71,76 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     (r'(?i)export\s+(\w+)\s*=\s*[^\s]{6,}', 'Environment Variable', {'min_length': 6, 'check_name': True}),
 ]
 
-# File extensions to exclude from scanning
-EXCLUDED_EXTENSIONS = {
+# Load exclusions from configuration if available
+def _load_exclusions() -> tuple:
+    """
+    Load exclusions from YAML file if available, otherwise use defaults.
+    Returns tuple of (excluded_extensions, excluded_directories)
+    """
+    # Load exclusions from YAML - Exclusions are now mandatory, not optional
+    exclusions = load_exclusions()
+    
+    # Extract file extensions (remove the asterisk and dot)
+    extensions = set()
+    for ext_pattern in exclusions.get('file_extensions', []):
+        if ext_pattern.startswith('*.'):
+            ext = ext_pattern[2:]
+            extensions.add(ext)
+        elif ext_pattern.startswith('*'):
+            ext = ext_pattern[1:]
+            extensions.add(ext)
+    
+    # Extract directory names (remove the ** and slashes)
+    directories = set()
+    for dir_pattern in exclusions.get('directories', []):
+        if '/**' in dir_pattern:
+            dir_name = dir_pattern.split('/**')[0]
+            if dir_name.startswith('**/'):
+                dir_name = dir_name[3:]
+            directories.add(dir_name)
+        elif dir_pattern.endswith('/'):
+            dir_name = dir_pattern[:-1]
+            if dir_name.startswith('**/'):
+                dir_name = dir_name[3:]
+            directories.add(dir_name)
+        else:
+            # Try to extract directory name from pattern
+            parts = dir_pattern.replace('**/', '').replace('/', '')
+            if parts:
+                directories.add(parts)
+    
+    return extensions, directories
+
+# File extensions to exclude from scanning - load from YAML if available
+EXCLUDED_EXTENSIONS_DEFAULT = {
     'zip', 'gz', 'tar', 'rar', '7z', 'exe', 'dll', 'so', 'dylib',
     'jar', 'war', 'ear', 'class', 'pyc', 'o', 'a', 'lib', 'obj',
     'bin', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'ico', 'mp3', 'mp4',
     'avi', 'mov', 'wmv', 'flv', 'pdf', 'doc', 'docx', 'xls', 'xlsx',
     'ppt', 'pptx', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'svg',
-    'tif', 'tiff', 'ico', 'webp'
+    'tif', 'tiff', 'ico', 'webp',
+    # Add new data file types
+    'xlsx', 'xlsb', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml',
+    'parquet', 'avro', 'orc'
 }
 
-# Directories to exclude from scanning
-EXCLUDED_DIRECTORIES = {
+# Directories to exclude from scanning - load from YAML if available
+EXCLUDED_DIRECTORIES_DEFAULT = {
     'distribution', 'node_modules', 'vendor', 'build', 'dist',
-    'reports', 'scan_results', '__pycache__', '.git'
+    'reports', 'scan_results', '__pycache__', '.git',
+    'test', 'tests', 'Test', 'Tests'  # Always exclude test directories
 }
+
+# Try to load exclusions, but fall back to defaults if there's an error
+try:
+    yaml_extensions, yaml_directories = _load_exclusions()
+    EXCLUDED_EXTENSIONS = EXCLUDED_EXTENSIONS_DEFAULT.union(yaml_extensions)
+    EXCLUDED_DIRECTORIES = EXCLUDED_DIRECTORIES_DEFAULT.union(yaml_directories)
+except Exception as e:
+    # If there's an error loading the exclusions, use the defaults
+    print(f"Error loading exclusions: {e}. Using default exclusions.")
+    EXCLUDED_EXTENSIONS = EXCLUDED_EXTENSIONS_DEFAULT
+    EXCLUDED_DIRECTORIES = EXCLUDED_DIRECTORIES_DEFAULT
 
 # Disallowed file extensions that might contain sensitive data
 DISALLOWED_EXTENSIONS = {
@@ -79,4 +158,43 @@ HTML_CONFIG = {
         'container_background': 'white',
         'header_background': '#f8f9fa',
     }
-} 
+}
+
+# Function to check if a file should be excluded based on exclusions
+def should_exclude_file(file_path: str) -> bool:
+    """
+    Check if a file should be excluded from scanning based on its path.
+    
+    Args:
+        file_path: Path to the file to check
+        
+    Returns:
+        True if the file should be excluded, False otherwise
+    """
+    # First check against all exclusion patterns from the YAML file
+    # This ensures glob patterns like **/*test*.* are properly evaluated
+    for pattern in get_exclusion_patterns():
+        if fnmatch.fnmatch(file_path, pattern):
+            return True
+    
+    # Skip files with excluded extensions
+    _, ext = os.path.splitext(file_path)
+    if ext and ext.lower().lstrip('.') in EXCLUDED_EXTENSIONS:
+        return True
+    
+    # Skip files in excluded directories
+    path_parts = file_path.split(os.path.sep)
+    for excluded_dir in EXCLUDED_DIRECTORIES:
+        if excluded_dir in path_parts:
+            return True
+    
+    # Check if the filename contains "test" or "Test"
+    file_name = os.path.basename(file_path)
+    if "test" in file_name.lower():
+        return True
+    
+    # Special handling for txt and md files - only include if they have project-related content
+    # This is a placeholder - the actual implementation would need to examine the file content
+    # For now, we'll be conservative and scan txt/md files in case they contain secrets
+    
+    return False 

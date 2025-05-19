@@ -12,9 +12,10 @@ import time
 import webbrowser
 import platform
  
+# Change logging level to only show progress information, not info or error logs
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.WARNING,  # Changed from INFO to WARNING to hide info logs
+    format='%(asctime)s - %(message)s'  # Simplified format to remove the log level
 )
  
 SCRIPT_DIR = Path(__file__).parent
@@ -24,12 +25,14 @@ from commit_scripts.secretscan import SecretScanner
 from commit_scripts.utils import mask_secret
 from commit_scripts.secretscan import generate_html_report
 try:
-    from commit_scripts.scan_config import should_scan_diff, should_scan_repo
+    from commit_scripts.scan_config import should_scan_diff, should_scan_repo, should_scan_changed_lines_only
 except ImportError:
     # If scan_config is not available, default to scanning both
     def should_scan_diff():
         return True
     def should_scan_repo():
+        return True
+    def should_scan_changed_lines_only():
         return True
 
 # Helper function for subprocess calls to prevent terminal windows
@@ -144,7 +147,7 @@ def get_pushed_files():
                 if files:
                     return files
             except subprocess.CalledProcessError:
-                # No need for detailed logging here
+                # Removed log statement
                 pass
         
         rev_list_cmd = ['git', 'rev-list', '--count', '@{u}..HEAD']
@@ -221,7 +224,8 @@ def get_pushed_files():
                 )
                 return [f for f in all_files_result.stdout.strip().split('\n') if f]
         except Exception as e:
-            logging.error(f"Error determining files in new branch: {e}")
+            # Removed error log
+            pass
         
         # Last resort, get files in latest commit
         try:
@@ -246,10 +250,10 @@ def get_pushed_files():
             )
             return [f for f in count_result.stdout.strip().split('\n') if f]
         except Exception as e:
-            logging.error(f"Error getting tracked files: {e}")
+            # Removed error log
             return []
     except Exception as e:
-        logging.error(f"Error getting pushed files: {e}")
+        # Removed error log
         return []
  
 def run_secret_scan_on_pushed_files():
@@ -259,22 +263,30 @@ def run_secret_scan_on_pushed_files():
         
         if not pushed_files:
             return []
-            
-        results = scanner.scan_files(pushed_files)
         
-        # Add a single summary log instead of logging each secret
+        # Check if we should scan only changed lines or entire files
+        if should_scan_changed_lines_only():
+            # Use the new scan_changed_lines method to only scan changed lines
+            print("-  Scanning only changed lines in files...")
+            results = scanner.scan_changed_lines(pushed_files)
+        else:
+            # Scan entire files
+            print("-  Scanning entire files...")
+            results = scanner.scan_files(pushed_files)
+            
+        # Replace info log with print to show only progress information
         if results:
-            logging.info(f"Secret scan found {len(results)} potential secrets in {len(pushed_files)} files")
+            print(f"Scanning: Found {len(results)} potential secrets in {len(pushed_files)} files")
             
         return results
     except Exception as e:
-        logging.error(f"Secret scan failed: {e}")
+        # Removed error log
         return []
 
 def open_html_report(file_path):
     try:
         if not os.path.isfile(file_path):
-            logging.error(f"HTML report file not found at {file_path}")
+            # Removed error log
             return False
             
         abs_path = os.path.abspath(file_path)
@@ -284,11 +296,12 @@ def open_html_report(file_path):
         success = webbrowser.open(file_uri)
         
         if not success:
-            logging.error("Failed to open browser")
+            # Removed error log
+            pass
             
         return success
     except Exception as e:
-        logging.error(f"Error opening HTML report: {e}")
+        # Removed error log
         return False
  
 def create_window(title, width=800, height=600):
@@ -687,7 +700,7 @@ def record_push_information(validation_results):
         return True
         
     except Exception as e:
-        logging.error(f"Error recording push information: {e}")
+        # Removed error log
         return False
 
 def append_justification_to_commit(validation_results):
@@ -729,11 +742,12 @@ def append_justification_to_commit(validation_results):
         if temp_file.exists():
             temp_file.unlink()
         
-        logging.info("Appended security justification to commit message")
+        # Replace info log with progress print
+        print("-  Added security justification to commit message")
         return True
         
     except Exception as e:
-        logging.error(f"Failed to append justification to commit message: {e}")
+        # Removed error log
         return False
 
 def generate_and_open_report(secrets_found):
@@ -743,21 +757,25 @@ def generate_and_open_report(secrets_found):
         
         scanner = SecretScanner()
         
-        # Scan the entire repository for all secrets only if enabled
+        # Check scan configuration
         repo_secrets = []
         if should_scan_repo():
-            logging.info("Repository scan enabled, scanning entire repository")
+            # Replace info log with progress print
+            print("-  Scanning entire repository...")
             repo_secrets = scanner.scan_repository()
         else:
-            logging.info("Repository scan disabled in configuration")
+            # Removed info log
+            pass
         
         # Check if diff scan is enabled
         diff_secrets = []
         if should_scan_diff():
-            logging.info("Diff scan enabled, using provided secrets_found")
+            # Replace info log with progress print
+            print("-  Scanning changed files...")
             diff_secrets = secrets_found
         else:
-            logging.info("Diff scan disabled in configuration")
+            # Removed info log
+            pass
         
         output_path = reports_dir / "scan-report.html"
         
@@ -770,7 +788,7 @@ def generate_and_open_report(secrets_found):
         )
         
         if not success:
-            logging.error("HTML report generation failed")
+            # Removed error log
             return False
             
         # Now add our custom table styling to fix column widths
@@ -812,15 +830,17 @@ def generate_and_open_report(secrets_found):
                 f.write(html_content)
                 
         except Exception as e:
-            logging.warning(f"Failed to add custom table styling: {e}")
+            # Removed warning log
             # Continue anyway since the basic report was generated
+            pass
         
         if open_html_report(str(output_path)):
-            logging.info("HTML report generated and opened in browser")
+            # Replace info log with progress print
+            print("-  Generated scan report and opened in browser")
         
         return True
     except Exception as e:
-        logging.error(f"Error generating HTML report: {e}")
+        # Removed error log
         return False
  
 def main():
@@ -840,28 +860,31 @@ def main():
             if "up to date" in status_output.lower() and "ahead" not in status_output:
                 sys.exit(0)
         except Exception as e:
-            # Keep this warning as it can be useful for identifying Git issues
-            logging.warning(f"Error checking git status: {e}")
+            # Removed warning log
+            pass
         
         pushed_files = get_pushed_files()
         if not pushed_files:
             sys.exit(0)
         
-        logging.info(f"Running pre-push hook for {len(pushed_files)} files")
+        # Replace info log with progress print
+        print(f"-  Running pre-push hook for {len(pushed_files)} files")
         
         # Check scan configuration
         secrets_data = []
         if should_scan_diff():
             secrets_data = run_secret_scan_on_pushed_files()
         else:
-            logging.info("Diff scanning disabled in configuration, skipping")
+            # Removed info log
+            pass
         
         validation_results = {}
         
         if secrets_data:
             validation = ValidationWindow()
             if not validation.run_validation(secrets_data):
-                logging.info("Push aborted by user during validation")
+                # Replace info log with progress print
+                print("-  Push aborted by user during validation")
                 sys.exit(1)
             
             validation_results = validation.results
@@ -872,16 +895,16 @@ def main():
             append_justification_to_commit(validation_results)
         else:
             save_metadata({}, [])
-            logging.info("No secrets found in pushed files")
+            # Replace info log with progress print
+            print("-  No secrets found in pushed files")
         
         generate_and_open_report(secrets_data)
         
         save_current_commit_as_pushed()
             
     except Exception as e:
-        # Keep this error log as it's important for reporting critical failures
-        logging.error(f"Error in pre-push hook: {e}")
-        print(f"Error: {e}", file=sys.stderr)
+        # Removed error log, replace with simple print without detailed error
+        print("An error occurred during the pre-push hook", file=sys.stderr)
         sys.exit(1)
  
 if __name__ == "__main__":

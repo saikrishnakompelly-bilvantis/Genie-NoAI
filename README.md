@@ -1,181 +1,155 @@
-# Genie - Secret Scanning Tool
+# Genie Secret Scanner
 
-A powerful desktop application designed to help developers scan Git repositories for secrets, API keys, credentials, and other sensitive information that should not be committed to version control.
+Genie is a powerful tool designed to scan your code repositories for secrets and sensitive information that may have been accidentally committed. It helps prevent security breaches by identifying potentially leaked credentials, API keys, tokens, and other sensitive information.
 
-## Overview
+## Features
 
-Genie is a cross-platform security tool that helps prevent accidental exposure of sensitive information in your code repositories. It operates in two main ways:
-
-1. **Git Hooks Integration**: Installs pre-commit and post-commit hooks to automatically scan for secrets before they are committed to your repositories
-2. **Manual Repository Scanning**: Allows on-demand scanning of entire repositories to identify existing secrets
-
-## Key Features
-
-- **Automatic Secret Detection**: Uses pattern matching and entropy analysis to detect various types of secrets:
-  - API keys and tokens
-  - Database credentials
-  - Private keys
-  - Authentication tokens
-  - Environment variables with sensitive data
-  - And more
-
-- **Git Hooks Integration**: 
-  - Pre-commit hook prevents committing secrets
-  - Post-commit hook provides additional verification
-  - Easy installation/uninstallation directly from the UI
-
-- **Interactive Reports**: 
-  - Detailed HTML reports of found secrets
-  - Ability to review and justify secrets when needed
-  - Historical report storage for audit purposes
-
-- **User-Friendly Interface**:
-  - Simple and intuitive UI
-  - Clear visualization of detected secrets
-  - Easy hook management
+- **Pre-commit and Pre-push Hooks**: Automatically scan your code before committing or pushing changes to detect secrets
+- **Repository Scanning**: Scan your entire repository for secrets
+- **Diff Scanning**: Scan only the changes to be pushed
+- **Configurable Exclusions**: Exclude specific file types and directories from scanning
+- **HTML Reports**: Generate detailed HTML reports of found secrets
 
 ## Installation
 
-### Using the Pre-built Executable
-
-1. Download the latest release of Genie
-2. Run the executable file:
-   - Windows: `Genie.exe`
-   - macOS: `Genie.app`
-   - Linux: `Genie`
-
-A desktop shortcut will be automatically created on first launch.
-
-### Building from Source
-
-1. Clone this repository
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
+1. Clone the repository:
    ```
-3. Run the build script:
-   ```bash
-   # Windows
-   build.bat
-   
-   # macOS/Linux
-   # Make sure the script is executable
-   chmod +x build.sh
-   ./build.sh
+   git clone https://github.com/yourusername/Genie-NoAI.git
    ```
-4. The executable will be created in the `dist` directory
 
-### Building for HSBC Environments
+2. Run the Genie application:
+   ```
+   cd Genie-NoAI
+   python src/main.py
+   ```
 
-If you experience an empty screen issue in HSBC environments, use the special HSBC build option:
+3. Use the GUI to install Git hooks in your project repositories.
+
+## Configuration
+
+### Scan Configuration
+
+Genie provides a configuration interface that allows you to customize how scanning works:
+
+1. **Scan Mode**: Choose between scanning both changed files and repository, only changed files, or only the repository.
+2. **Exclusions**: Configure files and directories to exclude from scanning.
+
+To access the configuration:
 
 ```bash
-# Windows
-build.bat hsbc
-
-# macOS/Linux
-./build.sh hsbc
+git scan-config
 ```
 
-This creates a special version (`Genie-HSBC.exe`) that uses native UI components instead of web-based rendering, making it compatible with environments that restrict web content rendering.
+### Exclusions Configuration
+
+Genie supports customizing which files and directories are excluded from scanning via a YAML configuration file named `exclusions.yaml`.
+
+#### Default Location
+
+The global exclusions file is located at:
+```
+~/.genie/exclusions.yaml
+```
+
+You can also create a local exclusions file in your repository:
+```
+your-repo/exclusions.yaml
+```
+
+#### Exclusions File Format
+
+The exclusions file uses YAML format and has three main sections:
+
+```yaml
+# File extensions to exclude
+file_extensions:
+  - "*.jar"    # Java Archive files
+  - "*.png"    # Image files
+  # ... more extensions
+
+# Directories to exclude
+directories:
+  - "**/node_modules/**"     # JavaScript dependencies
+  - "**/build/**"            # Build output
+  # ... more directories
+
+# Additional exclusions
+additional_exclusions:
+  - "**/.git/**"             # Git internal directory
+  # ... more patterns
+```
+
+#### Patterns
+
+Patterns use glob syntax:
+- `*` matches any sequence of non-path-separator characters
+- `**` matches any sequence of characters, including path separators
+- `?` matches any single non-path-separator character
+- `[seq]` matches any character in seq
+- `[!seq]` matches any character not in seq
+
+#### Example Exclusions
+
+The default exclusions include:
+
+1. **Compiled/Packaged Artifacts**:
+   - `.jar`, `.war`, `.ear`, `.pyc`, `.class` files
+
+2. **Log Files**:
+   - `.log`, `.out` files
+
+3. **Temporary Files and Directories**:
+   - `.tmp` files, `tmp/` and `temp/` directories, `__pycache__/`
+
+4. **IDE and Editor Files**:
+   - `.idea/`, `.vscode/`, etc.
+
+5. **Package Management Directories**:
+   - `node_modules/`, `vendor/`, etc.
+
+6. **Media and Documentation**:
+   - `.png`, `.jpg`, `.pdf`, `.md` files
+
+#### Editing Exclusions
+
+You can edit the exclusions file directly using a text editor or via the scan configuration interface:
+
+```bash
+git scan-config
+```
+
+Then click on the "Exclusions" tab and use the "Edit Exclusions" button.
 
 ## Usage
 
-### First Launch
+### Scanning a Repository
 
-When you first launch Genie, you'll see a welcome screen with an option to install Git hooks.
+To scan an entire repository:
 
-### Installing Git Hooks
+```bash
+git scan-repo
+```
 
-1. Open a Git repository in Genie
-2. Click the "Install Hooks" button
-3. Genie will install pre-commit and post-commit hooks in the selected repository
+### Pre-push Scanning
 
-### Running Manual Scans
+Once the Git hooks are installed, Genie will automatically scan your code before pushing changes to a remote repository.
 
-1. Open Genie
-2. Select a repository to scan
-3. Click "Scan Repository"
-4. Review the results in the generated HTML report
+### Configuration Interface
 
-### During Git Commits
+Launch the configuration interface:
 
-Once hooks are installed:
-
-1. When you attempt to commit code, the pre-commit hook will automatically scan for secrets
-2. If secrets are detected, you'll be prompted to review them
-3. You can choose to:
-   - Abort the commit to fix the issues
-   - Provide justification for detected secrets and proceed with the commit
-   - Skip the checks (not recommended)
-
-### Managing Reports
-
-All scan reports are stored in the `.commit-reports` directory within the Git hooks folder. You can view past reports from the Genie interface.
-
-## How It Works
-
-Genie uses several techniques to detect potential secrets:
-
-1. **Pattern Matching**: Searches for common patterns used in secrets and credentials
-2. **Entropy Analysis**: Calculates the randomness of strings to identify high-entropy values typical of secrets
-3. **Variable Name Inspection**: Identifies variables with names suggesting they contain sensitive information
-
-## System Requirements
-
-- **Windows**: Windows 10 or later
-- **macOS**: macOS 10.13 or later
-- **Linux**: Most modern distributions supported
-- **Git**: Git must be installed and accessible from the command line
-- **Disk Space**: Approximately 100MB
+```bash
+git scan-config
+```
 
 ## Troubleshooting
 
-### Common Issues
+If you encounter issues with the scanner:
 
-- **Hooks Not Working**: Ensure git is properly installed and configured with user.name and user.email
-- **Permission Denied**: Try running Genie with administrator/root privileges
-- **Application Not Starting**: Verify that your system meets the minimum requirements
-
-### Empty Screen in HSBC Environments
-
-If you encounter an empty screen when running Genie in an HSBC environment:
-
-1. **Use the HSBC Build**: Download or build the "HSBC" version using `build.bat hsbc` or `./build.sh hsbc`
-
-2. **Manual Fallback Configuration**: If you only have the standard version, create a file named `.genie_config` in your home directory with the following content:
-   ```
-   USE_NATIVE_UI=true
-   ```
-
-3. **Command-Line Arguments**: Run the application with the `--native-ui` flag:
-   ```
-   Genie.exe --native-ui
-   ```
-
-4. **Environment Variable**: Before launching, set this environment variable:
-   ```
-   # Windows
-   set GENIE_USE_NATIVE_UI=1
-   
-   # macOS/Linux
-   export GENIE_USE_NATIVE_UI=1
-   ```
-
-### Logs
-
-Logs are stored in:
-- Windows: `%USERPROFILE%\.genie\logs`
-- macOS/Linux: `~/.genie/logs`
-
-## Privacy
-
-Genie operates entirely locally on your system. No data is sent to external servers, and all scanning is performed on your local machine.
+1. Check that Git hooks are properly installed
+2. Verify that your exclusions configuration is valid YAML
+3. Look for error messages in the console output
 
 ## License
 
-This project is proprietary software. Unauthorized distribution is prohibited.
-
-## Support
-
-For support, bug reports, or feature requests, please contact your system administrator or the development team.
+Genie is licensed under the MIT License - see the LICENSE file for details.

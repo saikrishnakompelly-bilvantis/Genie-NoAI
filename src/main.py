@@ -5,10 +5,20 @@ import webbrowser
 from pathlib import Path
 from PySide6.QtWidgets import (QApplication, QMainWindow, QMessageBox, 
                             QFileDialog, QSplashScreen, QSizePolicy)
-from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWebEngineCore import QWebEnginePage
+
+# Immediately set the native UI environment variable for HSBC builds
+# This ensures we never even try to import QtWebEngineCore
+os.environ['GENIE_USE_NATIVE_UI'] = 'true'
+
+# Global flags
+use_native_ui = True
+use_web_engine = False
+
+# All WebEngine imports are now dynamic and never imported directly
+# This prevents PyInstaller from trying to include them
+
 from datetime import datetime
 from urllib.parse import quote, urljoin
 from urllib.request import pathname2url
@@ -34,126 +44,77 @@ except ImportError:
     # Handle the case where the module might not be available yet
     record_installation = record_uninstallation = lambda: None
 
-class ReportWindow(QMainWindow):
+# Only define web engine-dependent classes if we're using the web engine
+if use_web_engine:
+    class ReportWindow(QMainWindow):
+        def __init__(self, file_path):
+            super().__init__()
+            self.setWindowTitle("Genie - Report Viewer")
+            self.setGeometry(200, 200, 1200, 800)
+            
+            # Create web view
+            self.web_view = QWebEngineView()
+            self.setCentralWidget(self.web_view)
+            
+            # Load the file directly using QUrl
+            try:
+                file_url = QUrl.fromLocalFile(str(file_path))
+                self.web_view.setUrl(file_url)
+            except Exception as e:
+                print(f"Error loading report content: {e}")
+                self.close()
+
+    class CustomWebEnginePage(QWebEnginePage):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.parent = parent
+
+        def javaScriptConsoleMessage(self, level, message, line, source):
+            if message.startswith('action:'):
+                action = message.split(':')[1]
+                if action == 'install':
+                    self.parent.install_hooks()
+                elif action == 'uninstall':
+                    self.parent.uninstall_hooks()
+                elif action == 'exit':
+                    self.parent.close()
+                elif action.startswith('open_report'):
+                    try:
+                        report_index = int(message.split(':')[2])
+                        if not hasattr(self.parent, 'report_paths'):
+                            return
+                            
+                        if report_index < 0 or report_index >= len(self.parent.report_paths):
+                            return
+                        
+                        report_path = self.parent.report_paths[report_index]
+                        
+                        if not os.path.exists(report_path):
+                            return
+                            
+                        if not os.access(report_path, os.R_OK):
+                            return
+
+                        webbrowser.open('file://' + os.path.abspath(report_path))
+                        
+                    except Exception as e:
+                        pass
+
+# Native UI alternative for report viewing - this is always available
+class NativeReportWindow(QMainWindow):
     def __init__(self, file_path):
         super().__init__()
         self.setWindowTitle("Genie - Report Viewer")
         self.setGeometry(200, 200, 1200, 800)
         
-        # Create web view
-        self.web_view = QWebEngineView()
-        self.setCentralWidget(self.web_view)
-        
-        # Load the file directly using QUrl
-        try:
-            file_url = QUrl.fromLocalFile(str(file_path))
-            self.web_view.setUrl(file_url)
-        except Exception as e:
-            print(f"Error loading report content: {e}")
-            self.close()
+        # For native UI, we'll just open the file in the default browser
+        webbrowser.open('file://' + os.path.abspath(file_path))
+        self.close()  # Just close this window since we opened the browser
 
-class CustomWebEnginePage(QWebEnginePage):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent = parent
-
-    def javaScriptConsoleMessage(self, level, message, line, source):
-        if message.startswith('action:'):
-            action = message.split(':')[1]
-            if action == 'install':
-                self.parent.install_hooks()
-            elif action == 'uninstall':
-                self.parent.uninstall_hooks()
-            elif action == 'exit':
-                self.parent.close()
-            elif action.startswith('open_report'):
-                try:
-                    report_index = int(message.split(':')[2])
-                    if not hasattr(self.parent, 'report_paths'):
-                        return
-                        
-                    if report_index < 0 or report_index >= len(self.parent.report_paths):
-                        return
-                    
-                    report_path = self.parent.report_paths[report_index]
-                    
-                    if not os.path.exists(report_path):
-                        return
-                        
-                    if not os.access(report_path, os.R_OK):
-                        return
-
-                    webbrowser.open('file://' + os.path.abspath(report_path))
-                    
-                except Exception as e:
-                    pass
-
-# Add this new function to detect restricted environments
+# Function to check if we're in a restricted environment
 def is_restricted_environment():
-    """Detect if we're running in a restricted HSBC environment."""
-    try:
-        # Check command line arguments
-        if len(sys.argv) > 1 and any(arg in ['--native-ui', '--hsbc'] for arg in sys.argv):
-            return True
-            
-        # Check environment variables
-        if os.environ.get('GENIE_USE_NATIVE_UI', '').lower() in ('1', 'true', 'yes'):
-            return True
-            
-        # Check config file in user's home directory
-        config_file = os.path.join(os.path.expanduser('~'), '.genie_config')
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    content = f.read()
-                    if 'USE_NATIVE_UI=true' in content:
-                        return True
-            except Exception as e:
-                logging.warning(f"Failed to read config file: {e}")
-        
-        # Check for common environment variables that might indicate an HSBC environment
-        hsbc_indicators = ["CORP_", "HSBC", "ENTERPRISE_", "PROXY_REQUIRED"]
-        for env_var in os.environ:
-            if any(indicator in env_var for indicator in hsbc_indicators):
-                return True
-                
-        # Try to load a simple test page to see if QWebEngineView is restricted
-        from PySide6.QtWidgets import QApplication
-        from PySide6.QtWebEngineWidgets import QWebEngineView
-        from PySide6.QtCore import QUrl, QEventLoop
-        
-        # Skip this test if not in a GUI application
-        if not QApplication.instance():
-            return False
-            
-        test_view = QWebEngineView()
-        test_view.resize(1, 1)  # Minimize size to be invisible
-        
-        # Create an event loop to wait for load
-        loop = QEventLoop()
-        test_view.loadFinished.connect(loop.quit)
-        
-        # Try to load a simple HTML
-        test_view.setHtml("<html><body>Test</body></html>")
-        
-        # Wait with a timeout
-        from PySide6.QtCore import QTimer
-        timer = QTimer()
-        timer.setSingleShot(True)
-        timer.timeout.connect(loop.quit)
-        timer.start(500)  # 500ms timeout
-        
-        loop.exec()
-        
-        # Check if content loaded successfully
-        if test_view.url().isEmpty():
-            return True
-    except Exception as e:
-        # If we got an exception trying to use QWebEngineView, likely in a restricted env
-        logging.warning(f"Exception when testing QWebEngineView: {e}")
-        return True
-        
-    return False
+    """Always return True for HSBC builds to enforce native UI."""
+    return True
 
 class GenieApp(QMainWindow):
     def __init__(self):
@@ -165,11 +126,70 @@ class GenieApp(QMainWindow):
         # Check if we're in a restricted environment
         self.is_restricted_env = is_restricted_environment()
         
+        # Check for required dependencies before proceeding
+        if not self.check_dependencies():
+            # Dependencies missing - the check_dependencies method will display appropriate errors
+            sys.exit(1)
+        
         # Create shortcut on first run
         if self.is_first_run:
             self.create_desktop_shortcut()
             
         self.initUI()
+
+    def check_dependencies(self):
+        """Check if all required dependencies are installed and configured."""
+        # Check if Git is installed
+        try:
+            result = run_subprocess(['git', '--version'], capture_output=True, check=False, text=True)
+            if result.returncode != 0:
+                self.show_dependency_error("Git Not Found", "Git is not installed or not in your PATH. Please install Git and try again.")
+                return False
+                
+            # Git is installed, check if username and email are configured
+            username_result = run_subprocess(['git', 'config', '--global', 'user.name'], capture_output=True, check=False, text=True)
+            email_result = run_subprocess(['git', 'config', '--global', 'user.email'], capture_output=True, check=False, text=True)
+            
+            if username_result.returncode != 0 or not username_result.stdout.strip():
+                self.show_dependency_error("Git Configuration Missing", 
+                                           "Git username is not configured. Please run:\n\n" +
+                                           "git config --global user.name \"Your Name\"\n\n" +
+                                           "Then restart the application.")
+                return False
+                
+            if email_result.returncode != 0 or not email_result.stdout.strip():
+                self.show_dependency_error("Git Configuration Missing", 
+                                           "Git email is not configured. Please run:\n\n" +
+                                           "git config --global user.email \"your.email@example.com\"\n\n" +
+                                           "Then restart the application.")
+                return False
+                
+        except FileNotFoundError:
+            self.show_dependency_error("Git Not Found", "Git is not installed or not in your PATH. Please install Git and try again.")
+            return False
+            
+        # Check Python version - this will always be available since we're running in Python
+        python_version = sys.version_info
+        if python_version.major < 3 or (python_version.major == 3 and python_version.minor < 9):
+            self.show_dependency_error("Python Version Error", 
+                                    f"Python 3.9 or higher is required. You're running {sys.version.split()[0]}.\n" +
+                                    "Please upgrade Python and try again.")
+            return False
+            
+        # All checks passed
+        return True
+        
+    def show_dependency_error(self, title, message):
+        """Show an error message for dependency issues."""
+        if self.is_restricted_env:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, title, message)
+        else:
+            # We might not have web UI ready yet, so use native dialog
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, title, message)
+            
+        print(f"ERROR: {title} - {message}")
 
     def setup_paths(self):
         # Get the application's root directory
@@ -190,6 +210,7 @@ class GenieApp(QMainWindow):
         os.makedirs(self.assets_path, exist_ok=True)
 
     def initUI(self):
+        global use_web_engine, use_native_ui
         self.setWindowTitle('Genie - Secret Scanning Tool')
         
         # Load SVG for window icon
@@ -204,18 +225,8 @@ class GenieApp(QMainWindow):
         # Allow window to resize automatically with content
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        # Create UI based on environment type
-        if self.is_restricted_env:
-            self.create_native_ui()
-        else:
-            # Original web-based UI
-            self.web_view = QWebEngineView()
-            self.web_page = CustomWebEnginePage(self)
-            self.web_view.setPage(self.web_page)
-            self.setCentralWidget(self.web_view)
-            
-            # Load appropriate UI
-            self.load_appropriate_ui()
+        # For HSBC builds, always use native UI
+        self.create_native_ui()
 
     def create_desktop_shortcut(self):
         """Create desktop shortcut based on the operating system."""
@@ -323,18 +334,11 @@ Categories=Utility;Development;
             os.makedirs(config_dir, exist_ok=True)
 
     def load_appropriate_ui(self):
-        if self.is_restricted_env:
-            # For restricted environments, use appropriate native UI based on first run status
-            if self.is_first_run:
-                self.create_native_welcome_ui()
-            else:
-                self.create_native_main_ui()
-            return
-            
+        # For HSBC builds, always use native UI based on first run status
         if self.is_first_run:
-            self.load_welcome_ui()
+            self.create_native_welcome_ui()
         else:
-            self.load_main_ui()
+            self.create_native_main_ui()
 
     def load_welcome_ui(self):
         # First check if logo exists and convert to base64
@@ -780,6 +784,10 @@ Categories=Utility;Development;
     def install_hooks(self):
         """Install Git hooks and necessary files."""
         try:
+            # Recheck dependencies in case the user bypassed the initial check
+            if not self.check_dependencies():
+                return
+                
             # Get the user's home directory
             home_dir = os.path.expanduser('~')
             genie_dir = os.path.join(home_dir, '.genie')
@@ -1016,6 +1024,16 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
 
     def uninstall_hooks(self):
         try:
+            # Check if Git is installed before proceeding
+            try:
+                result = run_subprocess(['git', '--version'], capture_output=True, check=False, text=True)
+                if result.returncode != 0:
+                    self.show_dependency_error("Git Not Found", "Git is not installed or not in your PATH. Cannot uninstall hooks.")
+                    return
+            except FileNotFoundError:
+                self.show_dependency_error("Git Not Found", "Git is not installed or not in your PATH. Cannot uninstall hooks.")
+                return
+                
             # Remove Git configurations first
             if platform.system().lower() == 'windows':
                 run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
@@ -1344,6 +1362,24 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
         """Select a Git repository and scan it for secrets."""
         try:
             from PySide6.QtWidgets import QFileDialog, QMessageBox
+            
+            # Check if Git is installed before proceeding
+            try:
+                result = run_subprocess(['git', '--version'], capture_output=True, check=False, text=True)
+                if result.returncode != 0:
+                    QMessageBox.critical(
+                        self,
+                        "Git Not Found", 
+                        "Git is not installed or not in your PATH. Cannot scan repositories."
+                    )
+                    return
+            except FileNotFoundError:
+                QMessageBox.critical(
+                    self,
+                    "Git Not Found", 
+                    "Git is not installed or not in your PATH. Cannot scan repositories."
+                )
+                return
             
             # Show directory selection dialog
             repo_path = QFileDialog.getExistingDirectory(

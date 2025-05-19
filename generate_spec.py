@@ -3,7 +3,24 @@ import os
 # Create a runtime hook to force native UI mode
 runtime_hook_content = '''
 import os
+import sys
+
+# Set environment variable to force native UI
 os.environ['GENIE_USE_NATIVE_UI'] = 'true'
+
+# Override imports to prevent QtWebEngineCore from being imported
+class ImportBlocker:
+    def find_module(self, fullname, path=None):
+        if fullname == 'PySide6.QtWebEngineCore':
+            return self
+        return None
+        
+    def load_module(self, fullname):
+        raise ImportError(f"The {fullname} module is not available in this build")
+
+# Install the import blocker
+import sys
+sys.meta_path.insert(0, ImportBlocker())
 '''
 
 # Write the runtime hook
@@ -25,10 +42,6 @@ a = Analysis(['src/main.py'],
         'PySide6.QtWidgets',
         'PySide6.QtCore',
         'PySide6.QtGui',
-        'PySide6.QtWebEngineWidgets',
-        'PySide6.QtWebEngineCore',
-        'PySide6.QtWebEngine',
-        'PySide6.QtWebChannel',
         'PySide6.QtNetwork',
         'PySide6.QtPrintSupport',
         'python-dotenv'
@@ -36,7 +49,7 @@ a = Analysis(['src/main.py'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=['runtime_hook.py'],
-    excludes=[],
+    excludes=['PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtWebEngine'],  # Exclude all web engine modules
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

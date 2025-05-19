@@ -15,52 +15,8 @@ if [ "$1" = "hsbc" ]; then
     echo "Building special HSBC environment version..."
     HSBC_BUILD=true
     
-    # Create an HSBC version spec file with forced fallback UI
-    cat > genie-hsbc.spec << EOF
-# -*- mode: python ; coding: utf-8 -*-
-block_cipher = None
-
-a = Analysis(
-    ['src/main.py'],
-    pathex=[],
-    binaries=[],
-    datas=[('src/assets', 'assets'), ('src/hooks', 'hooks')],
-    hiddenimports=['PySide6.QtWidgets'],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=['PySide6.QtWebEngineCore'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='Genie-HSBC',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='src/assets/logo.ico'
-)
-EOF
+    # Generate the HSBC spec file using Python (same as Windows)
+    python generate_spec.py
     
     # Build the HSBC version
     pyinstaller --clean genie-hsbc.spec
@@ -69,13 +25,54 @@ else
     pyinstaller --clean genie.spec
 fi
 
+# For Mac, create a proper .app bundle if it's not already done
+if [ "$(uname)" = "Darwin" ]; then
+    # Check if we need to sign the app
+    if [ -n "$APPLE_DEVELOPER_ID" ]; then
+        echo "Signing the application with Developer ID: $APPLE_DEVELOPER_ID"
+        if [ "$HSBC_BUILD" = true ]; then
+            codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "dist/Genie-HSBC.app"
+        else
+            codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "dist/Genie.app"
+        fi
+    fi
+    
+    # Create a DMG if the create_dmg tool is available
+    if command -v create-dmg &> /dev/null; then
+        echo "Creating DMG package..."
+        if [ "$HSBC_BUILD" = true ]; then
+            create-dmg --volname "Genie-HSBC" --volicon "src/assets/logo.icns" \
+                       --window-pos 200 120 --window-size 600 400 \
+                       --icon-size 100 --icon "Genie-HSBC.app" 175 190 \
+                       --hide-extension "Genie-HSBC.app" --app-drop-link 425 190 \
+                       "dist/Genie-HSBC.dmg" "dist/Genie-HSBC.app"
+        else
+            create-dmg --volname "Genie" --volicon "src/assets/logo.icns" \
+                       --window-pos 200 120 --window-size 600 400 \
+                       --icon-size 100 --icon "Genie.app" 175 190 \
+                       --hide-extension "Genie.app" --app-drop-link 425 190 \
+                       "dist/Genie.dmg" "dist/Genie.app"
+        fi
+    fi
+fi
+
 echo "Build complete!"
 if [ "$HSBC_BUILD" = true ]; then
     if [ "$(uname)" = "Darwin" ]; then
-        echo "The HSBC version executable can be found at dist/Genie-HSBC.app"
+        echo "The HSBC version application can be found at dist/Genie-HSBC.app"
+        if [ -f "dist/Genie-HSBC.dmg" ]; then
+            echo "DMG installer created at dist/Genie-HSBC.dmg"
+        fi
     else
         echo "The HSBC version executable can be found at dist/Genie-HSBC"
     fi
 else
-    echo "The executable can be found in the dist folder."
+    if [ "$(uname)" = "Darwin" ]; then
+        echo "The application can be found at dist/Genie.app"
+        if [ -f "dist/Genie.dmg" ]; then
+            echo "DMG installer created at dist/Genie.dmg"
+        fi
+    else
+        echo "The executable can be found in the dist folder."
+    fi
 fi 

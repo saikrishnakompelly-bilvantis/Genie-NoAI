@@ -10,9 +10,12 @@ if [ ! -f "$CONFIG_SCRIPT" ]; then
     exit 1
 fi
 
-# Run the scan_config.py script using the system's Python interpreter
-# Redirect stderr to /dev/null to suppress macOS IMK messages
-python3 "$CONFIG_SCRIPT" "$@" 2>/dev/null
+# Run the scan_config.py script using python3 or python, whichever is available
+if command -v python3 >/dev/null 2>&1; then
+    python3 "$CONFIG_SCRIPT" "$@" 2>/dev/null
+else
+    python "$CONFIG_SCRIPT" "$@" 2>/dev/null
+fi
 EXIT_CODE=$?
 
 # Only show message on error
