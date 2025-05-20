@@ -46,4 +46,21 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='src/assets/logo.ico'  # Make sure to convert your logo.png to logo.ico
-) 
+)
+
+# Only create the app bundle on macOS
+import sys
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        exe,
+        name='Genie.app',
+        icon='src/assets/logo.icns',  # Ensure you have an .icns file for macOS
+        bundle_identifier=None,
+        info_plist={
+            'NSHighResolutionCapable': 'True',
+            'LSBackgroundOnly': 'False',  # Ensures app shows in dock and doesn't run in background
+            'CFBundleShortVersionString': '1.0.0',
+            'NSPrincipalClass': 'NSApplication',
+            'NSRequiresAquaSystemAppearance': 'False'  # Allows dark mode support
+        }
+    ) 
