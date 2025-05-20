@@ -7,14 +7,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 import datetime
-import yaml
 import shutil
 import sys
 import subprocess
 
 # Configuration constants
 CONFIG_FILENAME = ".genie_scan_config.json"
-EXCLUSIONS_FILENAME = "exclusions.yaml"
+EXCLUSIONS_FILENAME = "exclusions.json"
 DEFAULT_CONFIG = {
     "scan_mode": "diff",  # Options: "diff", "repo", "both"
     "scan_changed_lines_only": True,
@@ -29,7 +28,7 @@ def get_config_path():
     return os.path.join(genie_dir, CONFIG_FILENAME)
 
 def get_exclusions_path():
-    """Get the path to the exclusions YAML file."""
+    """Get the path to the exclusions JSON file."""
     # First check if there's a local exclusions file in the repository
     local_path = os.path.join(os.getcwd(), EXCLUSIONS_FILENAME)
     if os.path.exists(local_path):
@@ -129,12 +128,12 @@ def create_default_exclusions(path):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path, exist_ok=True)
     
-    # Write the default exclusions
+    # Write the default exclusions as JSON instead of YAML
     with open(path, 'w') as f:
-        yaml.dump(default_exclusions, f, default_flow_style=False)
+        json.dump(default_exclusions, f, indent=2)
 
 def load_exclusions():
-    """Load exclusions from the YAML file."""
+    """Load exclusions from the JSON file."""
     exclusions_path = get_exclusions_path()
     
     if not os.path.exists(exclusions_path):
@@ -143,7 +142,7 @@ def load_exclusions():
     if os.path.exists(exclusions_path):
         try:
             with open(exclusions_path, 'r') as f:
-                return yaml.safe_load(f)
+                return json.load(f)
         except Exception as e:
             print(f"Error loading exclusions: {e}")
     
