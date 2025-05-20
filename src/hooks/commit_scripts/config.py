@@ -3,7 +3,6 @@
 import os
 import sys
 from typing import List, Tuple, Dict, Set
-import yaml
 import fnmatch
 
 # Ensure the current directory is in the path for imports
