@@ -313,77 +313,78 @@ class ScanConfigUI:
             padding=5
         ).pack(anchor=tk.W, pady=5)
         
-        # Changed lines only option
-        changed_lines_frame = ttk.LabelFrame(self.scan_tab, text="Scanning Depth", padding=10)
-        changed_lines_frame.pack(fill=tk.X, padx=10, pady=10)
+        # Changed lines only option - COMMENTED OUT per request
+        # changed_lines_frame = ttk.LabelFrame(self.scan_tab, text="Scanning Depth", padding=10)
+        # changed_lines_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        # Add variable for changed lines only option
+        # Add variable for changed lines only option - Still need this for functionality
         self.changed_lines_only = tk.BooleanVar(value=self.config.get("scan_changed_lines_only", True))
         
-        ttk.Checkbutton(
-            changed_lines_frame,
-            text="Scan only changed lines (recommended)\nOnly scan the specific lines that have been modified, rather than entire files.",
-            variable=self.changed_lines_only,
-            padding=5
-        ).pack(anchor=tk.W, pady=5)
+        # ttk.Checkbutton(
+        #     changed_lines_frame,
+        #     text="Scan only changed lines (recommended)\nOnly scan the specific lines that have been modified, rather than entire files.",
+        #     variable=self.changed_lines_only,
+        #     padding=5
+        # ).pack(anchor=tk.W, pady=5)
         
         # Add explanatory text
-        ttk.Label(
-            changed_lines_frame,
-            text="Scanning only changed lines improves performance and reduces false positives.",
-            wraplength=400,
-            font=('Helvetica', 9, 'italic')
-        ).pack(anchor=tk.W, pady=5)
+        # ttk.Label(
+        #     changed_lines_frame,
+        #     text="Scanning only changed lines improves performance and reduces false positives.",
+        #     wraplength=400,
+        #     font=('Helvetica', 9, 'italic')
+        # ).pack(anchor=tk.W, pady=5)
         
-        # Exclusions notification frame - keep this since we need to inform users
-        exclusions_frame = ttk.LabelFrame(self.scan_tab, text="Exclusions", padding=10)
-        exclusions_frame.pack(fill=tk.X, padx=10, pady=10)
+        # Exclusions notification frame - COMMENTED OUT per request
+        # exclusions_frame = ttk.LabelFrame(self.scan_tab, text="Exclusions", padding=10)
+        # exclusions_frame.pack(fill=tk.X, padx=10, pady=10)
         
         # Notify that exclusions are always enabled
-        ttk.Label(
-            exclusions_frame,
-            text="Exclusions are always enabled to prevent scanning of certain files and directories.",
-            wraplength=400
-        ).pack(anchor=tk.W, pady=5)
+        # ttk.Label(
+        #     exclusions_frame,
+        #     text="Exclusions are always enabled to prevent scanning of certain files and directories.",
+        #     wraplength=400
+        # ).pack(anchor=tk.W, pady=5)
         
         # View/Edit exclusions button
-        ttk.Button(
-            exclusions_frame,
-            text="View Exclusions",
-            command=self.open_exclusions
-        ).pack(anchor=tk.W, pady=5)
+        # ttk.Button(
+        #     exclusions_frame,
+        #     text="View Exclusions",
+        #     command=self.open_exclusions
+        # ).pack(anchor=tk.W, pady=5)
         
-        # Current configuration summary
-        config_frame = ttk.LabelFrame(self.scan_tab, text="Current Configuration Summary", padding=10)
-        config_frame.pack(fill=tk.X, padx=10, pady=10)
+        # Current configuration summary - COMMENTED OUT per request
+        # config_frame = ttk.LabelFrame(self.scan_tab, text="Current Configuration Summary", padding=10)
+        # config_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.config_description = ttk.Label(
-            config_frame,
-            text=self.get_config_description(),
-            wraplength=500,
-            justify=tk.LEFT
-        )
-        self.config_description.pack(anchor=tk.W, pady=5)
+        # self.config_description = ttk.Label(
+        #     config_frame,
+        #     text=self.get_config_description(),
+        #     wraplength=500,
+        #     justify=tk.LEFT
+        # )
+        # self.config_description.pack(anchor=tk.W, pady=5)
         
+        # Removed duplicate button frame as per request
         # Button frame
-        button_frame = ttk.Frame(self.scan_tab)
-        button_frame.pack(fill=tk.X, padx=10, pady=20)
+        # button_frame = ttk.Frame(self.scan_tab)
+        # button_frame.pack(fill=tk.X, padx=10, pady=20)
         
         # Save button
-        save_button = ttk.Button(
-            button_frame,
-            text="Save Configuration",
-            command=self.save_and_exit
-        )
-        save_button.pack(side=tk.RIGHT, padx=5)
+        # save_button = ttk.Button(
+        #     button_frame,
+        #     text="Save Configuration",
+        #     command=self.save_and_exit
+        # )
+        # save_button.pack(side=tk.RIGHT, padx=5)
         
         # Cancel button
-        cancel_button = ttk.Button(
-            button_frame,
-            text="Cancel",
-            command=self.root.destroy
-        )
-        cancel_button.pack(side=tk.RIGHT, padx=5)
+        # cancel_button = ttk.Button(
+        #     button_frame,
+        #     text="Cancel",
+        #     command=self.root.destroy
+        # )
+        # cancel_button.pack(side=tk.RIGHT, padx=5)
         
         # Add notebook to select scan tab by default
         self.notebook.select(self.scan_tab)
