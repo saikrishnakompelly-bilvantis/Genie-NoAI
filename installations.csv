@@ -1,4 +1,4 @@
 user,timestamp,status,hostname,os,email
-sai.kompelly,2025-05-21 11:35:29,installed,BT-HYD-MAC-004s-MacBook-Pro.local,Darwin 24.3.0,sai.kompellt@bilvantis.io
+sai.kompelly,2025-05-21 15:31:43,uninstalled,BT-HYD-MAC-004s-MacBook-Pro.local,Darwin 24.3.0,sai.kompellt@bilvantis.io
 sai.kompellt,2025-04-07 15:27:51,uninstalled,BT-HYD-MAC-004s-MacBook-Pro.local,Darwin 24.3.0,
 bt-pg04g7a3\asritha.chintham,2025-05-20 15:47:20,installed,BT-PG04G7A3,Windows 11,asritha.chintham@bilvantis.io
