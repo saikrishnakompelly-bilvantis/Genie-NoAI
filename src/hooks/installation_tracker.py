@@ -11,6 +11,7 @@ import platform
 import getpass
 import base64
 import socket
+import tempfile
 from pathlib import Path
 
 # Add python-dotenv for environment variable management
@@ -254,40 +255,52 @@ def update_csv_in_github(csv_content, file_sha, commit_message):
     payload_json = json.dumps(payload)
     
     try:
-        # Prepare curl command for PUT request
-        curl_command = [
-            "curl",
-            "-s",  # silent
-            "-X", "PUT",
-            "-H", "Accept: application/vnd.github.v3+json",
-            "-H", f"Authorization: token {token}",
-            "-H", "Content-Type: application/json",
-            "-d", payload_json,
-            url
-        ]
-
-        # Execute curl command using our wrapper function
-        result = run_subprocess(curl_command, capture_output=True, text=True)
+        # Create a temporary file to store the JSON payload
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as temp_file:
+            temp_file_path = temp_file.name
+            temp_file.write(payload_json)
         
-        if result.returncode == 0:
-            try:
-                response_json = json.loads(result.stdout)
-                if "content" in response_json:
-                    logging.info(f"Successfully updated CSV in GitHub: {commit_message}")
-                    return True
-                else:
-                    # Check for error message
-                    if "message" in response_json:
-                        logging.error(f"GitHub API error: {response_json.get('message')}")
+        try:
+            # Prepare curl command to use the temporary file
+            curl_command = [
+                "curl",
+                "-s",  # silent
+                "-X", "PUT",
+                "-H", "Accept: application/vnd.github.v3+json",
+                "-H", f"Authorization: token {token}",
+                "-H", "Content-Type: application/json",
+                "--data-binary", f"@{temp_file_path}",  # Use the temp file instead of inline data
+                url
+            ]
+
+            # Execute curl command using our wrapper function
+            result = run_subprocess(curl_command, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                try:
+                    response_json = json.loads(result.stdout)
+                    if "content" in response_json:
+                        logging.info(f"Successfully updated CSV in GitHub: {commit_message}")
+                        return True
                     else:
-                        logging.error("Unknown error while updating CSV in GitHub")
+                        # Check for error message
+                        if "message" in response_json:
+                            logging.error(f"GitHub API error: {response_json.get('message')}")
+                        else:
+                            logging.error("Unknown error while updating CSV in GitHub")
+                        return False
+                except json.JSONDecodeError:
+                    logging.error(f"Failed to parse JSON response from GitHub API")
                     return False
-            except json.JSONDecodeError:
-                logging.error(f"Failed to parse JSON response from GitHub API")
+            else:
+                logging.error(f"Curl command failed: {result.stderr}")
                 return False
-        else:
-            logging.error(f"Curl command failed: {result.stderr}")
-            return False
+        finally:
+            # Clean up the temporary file
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                logging.warning(f"Failed to delete temporary file {temp_file_path}: {e}")
     except Exception as e:
         logging.error(f"Error updating CSV in GitHub with curl: {e}")
         return False
