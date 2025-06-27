@@ -32,7 +32,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Genie',
+    name='SecretGenie',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -53,7 +53,7 @@ import sys
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='Genie.app',
+        name='SecretGenie.app',
         icon='src/assets/logo.icns',  # Ensure you have an .icns file for macOS
         bundle_identifier=None,
         info_plist={

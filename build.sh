@@ -33,7 +33,7 @@ if [ "$(uname)" = "Darwin" ]; then
         if [ "$HSBC_BUILD" = true ]; then
             codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "dist/Genie-HSBC.app"
         else
-            codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "dist/Genie.app"
+            codesign --force --options runtime --sign "$APPLE_DEVELOPER_ID" "dist/SecretGenie.app"
         fi
     fi
     
@@ -51,7 +51,7 @@ if [ "$(uname)" = "Darwin" ]; then
                        --window-pos 200 120 --window-size 600 400 \
                        --icon-size 100 --icon "Genie.app" 175 190 \
                        --hide-extension "Genie.app" --app-drop-link 425 190 \
-                       "dist/Genie.dmg" "dist/Genie.app"
+                       "dist/Genie.dmg" "dist/SecretGenie.app"
         fi
     fi
 fi
