@@ -12,6 +12,8 @@ Genie is a powerful tool designed to scan your code repositories for secrets and
 
 ## Installation
 
+### GUI Installation
+
 1. Clone the repository:
    ```
    git clone https://github.com/yourusername/Genie-NoAI.git
@@ -24,6 +26,80 @@ Genie is a powerful tool designed to scan your code repositories for secrets and
    ```
 
 3. Use the GUI to install Git hooks in your project repositories.
+
+### Command-Line Installation
+
+Genie supports command-line installation and uninstallation without requiring GUI interaction. This is useful for automated deployments, CI/CD pipelines, or when running on headless systems.
+
+#### Direct Command-Line Usage
+
+**Install hooks:**
+```bash
+# From source
+python src/main.py /install
+
+# From built executable (Windows)
+Genie.exe /install
+
+# From built executable (macOS/Linux)
+./Genie /install
+```
+
+**Uninstall hooks:**
+```bash
+# From source
+python src/main.py /uninstall
+
+# From built executable (Windows)
+Genie.exe /uninstall
+
+# From built executable (macOS/Linux)
+./Genie /uninstall
+```
+
+#### Using Wrapper Scripts
+
+For built executables, you can also use the provided wrapper scripts that ensure console output is visible:
+
+**Windows:**
+```batch
+# Using batch file
+genie-cli.bat /install
+genie-cli.bat /uninstall
+
+# Using PowerShell script
+.\genie-cli.ps1 /install
+.\genie-cli.ps1 /uninstall
+```
+
+**macOS/Linux:**
+```bash
+# Using shell script
+./genie-cli.sh /install
+./genie-cli.sh /uninstall
+```
+
+#### Command-Line Options
+
+- `/install` or `--install`: Install Genie Git hooks
+- `/uninstall` or `--uninstall`: Uninstall Genie Git hooks
+- `--help`: Show help information
+
+#### Prerequisites for Command-Line Installation
+
+Before using command-line installation, ensure:
+
+1. **Git is installed** and available in your PATH
+2. **Git user configuration** is set:
+   ```bash
+   git config --global user.name "Your Name"
+   git config --global user.email "your.email@example.com"
+   ```
+
+#### Exit Codes
+
+- `0`: Operation completed successfully
+- `1`: Operation failed (check console output for details)
 
 ## Configuration
 

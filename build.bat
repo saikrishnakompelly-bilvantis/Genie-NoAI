@@ -29,10 +29,24 @@ if "%1"=="hsbc" (
     pyinstaller --clean genie.spec
 )
 
+REM Copy CLI wrapper scripts to dist folder
+echo Copying CLI wrapper scripts...
+if "%HSBC_BUILD%"=="true" (
+    copy secretgenie-cli.bat dist\secretgenie-cli.bat >nul 2>&1
+    copy secretgenie-cli.ps1 dist\secretgenie-cli.ps1 >nul 2>&1
+    echo CLI wrapper scripts copied to dist folder.
+) else (
+    copy secretgenie-cli.bat dist\secretgenie-cli.bat >nul 2>&1
+    copy secretgenie-cli.ps1 dist\secretgenie-cli.ps1 >nul 2>&1
+    echo CLI wrapper scripts copied to dist folder.
+)
+
 echo Build complete!
 if "%HSBC_BUILD%"=="true" (
-    echo The HSBC version executable can be found at dist\Genie-HSBC.exe
+    echo The HSBC version executable can be found at dist\SecretGenie-HSBC.exe
+    echo CLI wrappers: dist\secretgenie-cli.bat and dist\secretgenie-cli.ps1
 ) else (
     echo The executable can be found in the dist folder.
+    echo CLI wrappers: dist\secretgenie-cli.bat and dist\secretgenie-cli.ps1
 )
 pause 

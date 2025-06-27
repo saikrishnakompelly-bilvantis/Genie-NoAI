@@ -56,23 +56,31 @@ if [ "$(uname)" = "Darwin" ]; then
     fi
 fi
 
+# Copy CLI wrapper script to dist folder
+echo "Copying CLI wrapper script..."
+cp secretgenie-cli.sh dist/secretgenie-cli.sh 2>/dev/null || true
+chmod +x dist/secretgenie-cli.sh 2>/dev/null || true
+echo "CLI wrapper script copied to dist folder."
+
 echo "Build complete!"
 if [ "$HSBC_BUILD" = true ]; then
     if [ "$(uname)" = "Darwin" ]; then
-        echo "The HSBC version application can be found at dist/Genie-HSBC.app"
-        if [ -f "dist/Genie-HSBC.dmg" ]; then
-            echo "DMG installer created at dist/Genie-HSBC.dmg"
+        echo "The HSBC version application can be found at dist/SecretGenie-HSBC.app"
+        if [ -f "dist/SecretGenie-HSBC.dmg" ]; then
+            echo "DMG installer created at dist/SecretGenie-HSBC.dmg"
         fi
     else
-        echo "The HSBC version executable can be found at dist/Genie-HSBC"
+        echo "The HSBC version executable can be found at dist/SecretGenie-HSBC"
     fi
+    echo "CLI wrapper: dist/secretgenie-cli.sh"
 else
     if [ "$(uname)" = "Darwin" ]; then
-        echo "The application can be found at dist/Genie.app"
-        if [ -f "dist/Genie.dmg" ]; then
-            echo "DMG installer created at dist/Genie.dmg"
+        echo "The application can be found at dist/SecretGenie.app"
+        if [ -f "dist/SecretGenie.dmg" ]; then
+            echo "DMG installer created at dist/SecretGenie.dmg"
         fi
     else
         echo "The executable can be found in the dist folder."
     fi
+    echo "CLI wrapper: dist/secretgenie-cli.sh"
 fi 

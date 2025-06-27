@@ -192,22 +192,34 @@ class GenieApp(QMainWindow):
         print(f"ERROR: {title} - {message}")
 
     def setup_paths(self):
-        # Get the application's root directory
-        #             # If the application is run from a Python interpreter
-        self.app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # Get the application's root directory and set up paths
+        if getattr(sys, 'frozen', False):
+            # When frozen (built executable), resources are bundled in _MEIPASS
+            self.assets_path = os.path.join(sys._MEIPASS, 'assets')
+            self.hooks_source = os.path.join(sys._MEIPASS, 'hooks')
+            self.app_path = sys._MEIPASS
+        else:
+            # When running from source
+            self.app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            
+            # Set up asset paths
+            self.assets_path = os.path.join(self.app_path, 'src', 'assets')
+            # Fallback for different project structures
+            if not os.path.exists(self.assets_path):
+                self.assets_path = os.path.join(self.app_path, 'assets')
+            
+            # Set up hooks paths
+            self.hooks_source = os.path.join(self.app_path, 'src', 'hooks')
+            # Fallback for different project structures
+            if not os.path.exists(self.hooks_source):
+                self.hooks_source = os.path.join(self.app_path, 'hooks')
         
-        # Set up asset paths
-        self.assets_path = os.path.join(self.app_path, 'assets')
+        # Set logo path
         self.logo_path = os.path.join(self.assets_path, 'logo.png')
         
-        # Set up hooks paths
-        self.hooks_source = os.path.join(self.app_path, 'hooks')
-        if not os.path.exists(self.hooks_source) and not getattr(sys, 'frozen', False):
-            # Try to find hooks in src directory when running from source
-            self.hooks_source = os.path.join(self.app_path, 'src', 'hooks')
-        
-        # Ensure the assets directory exists
-        os.makedirs(self.assets_path, exist_ok=True)
+        # Ensure the assets directory exists (only needed when running from source)
+        if not getattr(sys, 'frozen', False):
+            os.makedirs(self.assets_path, exist_ok=True)
 
     def initUI(self):
         global use_web_engine, use_native_ui
@@ -792,6 +804,45 @@ Categories=Utility;Development;
             home_dir = os.path.expanduser('~')
             genie_dir = os.path.join(home_dir, '.genie')
             hooks_dir = os.path.join(genie_dir, 'hooks')
+            
+            # Check if hooks are already installed
+            config_file = os.path.join(genie_dir, 'config')
+            is_already_installed = False
+            
+            if os.path.exists(config_file):
+                try:
+                    with open(config_file, 'r') as f:
+                        content = f.read()
+                        if 'installed=true' in content:
+                            is_already_installed = True
+                except:
+                    pass
+            
+            # Also check if hooks directory exists and has files
+            if not is_already_installed and os.path.exists(hooks_dir) and os.listdir(hooks_dir):
+                is_already_installed = True
+            
+            # Also check if Git hooks path is set to our directory
+            if not is_already_installed:
+                hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                                capture_output=True, text=True, check=False)
+                if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip() == hooks_dir:
+                    is_already_installed = True
+            
+            if is_already_installed:
+                if self.is_restricted_env:
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.information(self, "Already Installed", 
+                                          "✓ Genie hooks are already installed!\n\n" +
+                                          "To reinstall hooks, run the uninstall command first.")
+                else:
+                    self.show_message(
+                        'Already Installed',
+                        '✓ Genie hooks are already installed!\n\n' +
+                        'To reinstall hooks, uninstall first and then install again.',
+                        'info'
+                    )
+                return
             
             # Create necessary directories
             os.makedirs(hooks_dir, exist_ok=True)
@@ -1504,7 +1555,278 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Failed to scan repository:\n{str(e)}")
 
+def install_hooks_cli():
+    """Install hooks from command line without GUI."""
+    try:
+        print("Installing Genie hooks...")
+        
+        # Create a temporary instance to access the install logic
+        # We'll use a minimal setup to avoid GUI dependencies
+        import tempfile
+        
+        # Get the app path and hooks source
+        if getattr(sys, 'frozen', False):
+            # When frozen (built executable), hooks are bundled in _MEIPASS
+            hooks_source = os.path.join(sys._MEIPASS, 'hooks')
+        else:
+            # When running from source
+            app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            hooks_source = os.path.join(app_path, 'src', 'hooks')
+            # Fallback for different project structures
+            if not os.path.exists(hooks_source):
+                hooks_source = os.path.join(app_path, 'hooks')
+        
+        if not os.path.exists(hooks_source):
+            print(f"ERROR: Hooks directory not found at {hooks_source}")
+            return False
+        
+        # Check dependencies first
+        print("Checking dependencies...")
+        
+        # Check Git
+        try:
+            result = run_subprocess(['git', '--version'], capture_output=True, check=False, text=True)
+            if result.returncode != 0:
+                print("ERROR: Git is not installed or not in your PATH. Please install Git and try again.")
+                return False
+        except FileNotFoundError:
+            print("ERROR: Git is not installed or not in your PATH. Please install Git and try again.")
+            return False
+        
+        # Check Git configuration
+        username_result = run_subprocess(['git', 'config', '--global', 'user.name'], capture_output=True, check=False, text=True)
+        email_result = run_subprocess(['git', 'config', '--global', 'user.email'], capture_output=True, check=False, text=True)
+        
+        if username_result.returncode != 0 or not username_result.stdout.strip():
+            print("ERROR: Git username is not configured. Please run:")
+            print("git config --global user.name \"Your Name\"")
+            return False
+            
+        if email_result.returncode != 0 or not email_result.stdout.strip():
+            print("ERROR: Git email is not configured. Please run:")
+            print("git config --global user.email \"your.email@example.com\"")
+            return False
+        
+        print("Dependencies check passed.")
+        
+        # Check if hooks are already installed
+        hooks_path = os.path.expanduser('~/.genie/hooks')
+        config_file = os.path.expanduser('~/.genie/config')
+        
+        # Check if already installed
+        is_already_installed = False
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, 'r') as f:
+                    content = f.read()
+                    if 'installed=true' in content:
+                        is_already_installed = True
+            except:
+                pass
+        
+        # Also check if hooks directory exists and has files
+        if not is_already_installed and os.path.exists(hooks_path) and os.listdir(hooks_path):
+            is_already_installed = True
+        
+        # Also check if Git hooks path is set to our directory
+        if not is_already_installed:
+            hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                            capture_output=True, text=True, check=False)
+            if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip() == hooks_path:
+                is_already_installed = True
+        
+        if is_already_installed:
+            print("✓ Genie hooks are already installed!")
+            print("\nTo reinstall hooks, run the uninstall command first:")
+            print("  genie.exe /uninstall   (or your platform equivalent)")
+            print("  genie.exe /install")
+            return True
+        
+        # Copy hooks to user directory
+        print(f"Copying hooks from {hooks_source} to {hooks_path}...")
+        
+        # Remove existing hooks directory if it exists
+        if os.path.exists(hooks_path):
+            shutil.rmtree(hooks_path)
+        
+        # Create hooks directory
+        os.makedirs(hooks_path, exist_ok=True)
+        
+        # Copy hooks
+        for item in os.listdir(hooks_source):
+            src_path = os.path.join(hooks_source, item)
+            dst_path = os.path.join(hooks_path, item)
+            
+            if os.path.isdir(src_path):
+                shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+            else:
+                shutil.copy2(src_path, dst_path)
+        
+        print("Hooks copied successfully.")
+        
+        # Configure Git
+        print("Configuring Git...")
+        
+        # Set global hooks path
+        run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_path], check=True)
+        
+        # Set up aliases
+        scan_repo_cmd = f'!python "{os.path.join(hooks_path, "scan_repo.py")}"'
+        scan_config_cmd = f'!python "{os.path.join(hooks_path, "scan_config.py")}"'
+        
+        run_subprocess(['git', 'config', '--global', 'alias.scan-repo', scan_repo_cmd], check=True)
+        run_subprocess(['git', 'config', '--global', 'alias.scan-config', scan_config_cmd], check=True)
+        
+        # Create user bin directory and scripts (for Unix-like systems)
+        if platform.system().lower() != 'windows':
+            user_bin_dir = os.path.expanduser('~/bin')
+            os.makedirs(user_bin_dir, exist_ok=True)
+            
+            # Create git-scan-config script
+            git_scan_config_content = f'''#!/bin/bash
+python "{os.path.join(hooks_path, 'scan_config.py')}" "$@"
+'''
+            git_scan_config_path = os.path.join(user_bin_dir, 'git-scan-config')
+            with open(git_scan_config_path, 'w') as f:
+                f.write(git_scan_config_content)
+            os.chmod(git_scan_config_path, 0o755)
+            
+            # Create git-scan-repo script
+            git_scan_repo_content = f'''#!/bin/bash
+python "{os.path.join(hooks_path, 'scan_repo.py')}" "$@"
+'''
+            git_scan_repo_path = os.path.join(user_bin_dir, 'git-scan-repo')
+            with open(git_scan_repo_path, 'w') as f:
+                f.write(git_scan_repo_content)
+            os.chmod(git_scan_repo_path, 0o755)
+        
+        # Record installation
+        try:
+            from hooks.installation_tracker import record_installation
+            record_installation()
+            print("Installation recorded in tracking system.")
+        except Exception as e:
+            print(f"Warning: Could not record installation: {e}")
+        
+        # Mark as installed
+        config_dir = os.path.expanduser('~/.genie')
+        config_file = os.path.join(config_dir, 'config')
+        os.makedirs(config_dir, exist_ok=True)
+        
+        with open(config_file, 'w') as f:
+            f.write('installed=true\n')
+        
+        print("✓ Genie hooks installed successfully!")
+        print("\nGenie is now monitoring your Git commits for secrets and credentials.")
+        print("The hooks will automatically scan your code during commits.")
+        
+        return True
+        
+    except Exception as e:
+        print(f"ERROR: Failed to install hooks: {str(e)}")
+        return False
+
+
+def uninstall_hooks_cli():
+    """Uninstall hooks from command line without GUI."""
+    try:
+        print("Uninstalling Genie hooks...")
+        
+        # Remove Git configuration
+        print("Removing Git configuration...")
+        
+        run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], check=False)
+        run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'], check=False)
+        run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'], check=False)
+        
+        # Record uninstallation
+        try:
+            # Import here to avoid issues if the module is missing
+            hooks_path = os.path.expanduser('~/.genie/hooks')
+            sys.path.insert(0, hooks_path)
+            from installation_tracker import record_uninstallation
+            record_uninstallation()
+            print("Uninstallation recorded in tracking system.")
+        except Exception as e:
+            print(f"Warning: Could not record uninstallation: {e}")
+        
+        # Clean up scripts in user's bin directory
+        if platform.system().lower() != 'windows':
+            try:
+                user_bin_dir = os.path.expanduser('~/bin')
+                git_scan_config_path = os.path.join(user_bin_dir, 'git-scan-config')
+                git_scan_repo_path = os.path.join(user_bin_dir, 'git-scan-repo')
+                
+                if os.path.exists(git_scan_config_path):
+                    os.remove(git_scan_config_path)
+                    print(f"Removed {git_scan_config_path}")
+                
+                if os.path.exists(git_scan_repo_path):
+                    os.remove(git_scan_repo_path)
+                    print(f"Removed {git_scan_repo_path}")
+            except Exception as e:
+                print(f"Warning: Could not clean up user bin scripts: {e}")
+        
+        # Remove .genie directory
+        genie_dir = os.path.expanduser('~/.genie')
+        if os.path.exists(genie_dir):
+            shutil.rmtree(genie_dir)
+            print("Removed .genie directory")
+        
+        # Verify uninstallation
+        hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
+                                        capture_output=True, text=True, check=False)
+        
+        if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip():
+            print(f"Warning: Git hooks path still set to: {hooks_path_result.stdout.strip()}")
+        
+        print("✓ Genie hooks uninstalled successfully!")
+        print("Git configuration has been reset to default.")
+        
+        return True
+        
+    except Exception as e:
+        print(f"ERROR: Failed to uninstall hooks: {str(e)}")
+        return False
+
 if __name__ == '__main__':
+    import argparse
+    
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Genie - Secret Scanning Tool')
+    parser.add_argument('--install', action='store_true',
+                        help='Install Genie hooks without GUI')
+    parser.add_argument('--uninstall', action='store_true',
+                        help='Uninstall Genie hooks without GUI')
+    
+    # Parse arguments, but be flexible about the format
+    args = []
+    for arg in sys.argv[1:]:
+        if arg.startswith('/'):
+            args.append('--' + arg[1:])
+        else:
+            args.append(arg)
+    
+    try:
+        parsed_args = parser.parse_args(args)
+    except SystemExit:
+        # If argument parsing fails, fall back to GUI mode
+        parsed_args = None
+    
+    # Handle command line operations
+    if parsed_args and (parsed_args.install or parsed_args.uninstall):
+        # Command line mode
+        success = False
+        
+        if parsed_args.install:
+            success = install_hooks_cli()
+        elif parsed_args.uninstall:
+            success = uninstall_hooks_cli()
+        
+        # Exit with appropriate code
+        sys.exit(0 if success else 1)
+    
+    # GUI mode (original code)
     try:
         # Initialize QApplication first
         app = QApplication(sys.argv)
