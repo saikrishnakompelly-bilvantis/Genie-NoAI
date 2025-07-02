@@ -1557,8 +1557,28 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
 
 def install_hooks_cli():
     """Install hooks from command line without GUI."""
+    # Allocate console on Windows for CLI mode
+    if platform.system().lower() == 'windows':
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel32 = ctypes.windll.kernel32
+            
+            # Try to attach to parent console first
+            if not kernel32.AttachConsole(-1):  # ATTACH_PARENT_PROCESS
+                # If that fails, allocate a new console
+                kernel32.AllocConsole()
+            
+            # Redirect stdout and stderr to console
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+        except Exception:
+            pass  # Continue without console if allocation fails
+    
     try:
-        print("Installing Genie hooks...")
+        print("Installing SecretGenie hooks...")
+        sys.stdout.flush()
         
         # Create a temporary instance to access the install logic
         # We'll use a minimal setup to avoid GUI dependencies
@@ -1578,19 +1598,23 @@ def install_hooks_cli():
         
         if not os.path.exists(hooks_source):
             print(f"ERROR: Hooks directory not found at {hooks_source}")
+            sys.stdout.flush()
             return False
         
         # Check dependencies first
         print("Checking dependencies...")
+        sys.stdout.flush()
         
         # Check Git
         try:
             result = run_subprocess(['git', '--version'], capture_output=True, check=False, text=True)
             if result.returncode != 0:
                 print("ERROR: Git is not installed or not in your PATH. Please install Git and try again.")
+                sys.stdout.flush()
                 return False
         except FileNotFoundError:
             print("ERROR: Git is not installed or not in your PATH. Please install Git and try again.")
+            sys.stdout.flush()
             return False
         
         # Check Git configuration
@@ -1600,14 +1624,17 @@ def install_hooks_cli():
         if username_result.returncode != 0 or not username_result.stdout.strip():
             print("ERROR: Git username is not configured. Please run:")
             print("git config --global user.name \"Your Name\"")
+            sys.stdout.flush()
             return False
             
         if email_result.returncode != 0 or not email_result.stdout.strip():
             print("ERROR: Git email is not configured. Please run:")
             print("git config --global user.email \"your.email@example.com\"")
+            sys.stdout.flush()
             return False
         
         print("Dependencies check passed.")
+        sys.stdout.flush()
         
         # Check if hooks are already installed
         hooks_path = os.path.expanduser('~/.genie/hooks')
@@ -1636,14 +1663,20 @@ def install_hooks_cli():
                 is_already_installed = True
         
         if is_already_installed:
-            print("✓ Genie hooks are already installed!")
+            print("✓ SecretGenie hooks are already installed!")
             print("\nTo reinstall hooks, run the uninstall command first:")
-            print("  genie.exe /uninstall   (or your platform equivalent)")
-            print("  genie.exe /install")
+            if platform.system().lower() == 'windows':
+                print("  SecretGenie.exe /uninstall")
+                print("  SecretGenie.exe /install")
+            else:
+                print("  ./SecretGenie /uninstall")
+                print("  ./SecretGenie /install")
+            sys.stdout.flush()
             return True
         
         # Copy hooks to user directory
         print(f"Copying hooks from {hooks_source} to {hooks_path}...")
+        sys.stdout.flush()
         
         # Remove existing hooks directory if it exists
         if os.path.exists(hooks_path):
@@ -1663,9 +1696,11 @@ def install_hooks_cli():
                 shutil.copy2(src_path, dst_path)
         
         print("Hooks copied successfully.")
+        sys.stdout.flush()
         
         # Configure Git
         print("Configuring Git...")
+        sys.stdout.flush()
         
         # Set global hooks path
         run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_path], check=True)
@@ -1705,8 +1740,10 @@ python "{os.path.join(hooks_path, 'scan_repo.py')}" "$@"
             from hooks.installation_tracker import record_installation
             record_installation()
             print("Installation recorded in tracking system.")
+            sys.stdout.flush()
         except Exception as e:
             print(f"Warning: Could not record installation: {e}")
+            sys.stdout.flush()
         
         # Mark as installed
         config_dir = os.path.expanduser('~/.genie')
@@ -1716,24 +1753,47 @@ python "{os.path.join(hooks_path, 'scan_repo.py')}" "$@"
         with open(config_file, 'w') as f:
             f.write('installed=true\n')
         
-        print("✓ Genie hooks installed successfully!")
-        print("\nGenie is now monitoring your Git commits for secrets and credentials.")
+        print("✓ SecretGenie hooks installed successfully!")
+        print("\nSecretGenie is now monitoring your Git commits for secrets and credentials.")
         print("The hooks will automatically scan your code during commits.")
+        sys.stdout.flush()
         
         return True
         
     except Exception as e:
         print(f"ERROR: Failed to install hooks: {str(e)}")
+        sys.stdout.flush()
         return False
 
 
 def uninstall_hooks_cli():
     """Uninstall hooks from command line without GUI."""
+    # Allocate console on Windows for CLI mode
+    if platform.system().lower() == 'windows':
+        try:
+            import ctypes
+            from ctypes import wintypes
+            kernel32 = ctypes.windll.kernel32
+            
+            # Try to attach to parent console first
+            if not kernel32.AttachConsole(-1):  # ATTACH_PARENT_PROCESS
+                # If that fails, allocate a new console
+                kernel32.AllocConsole()
+            
+            # Redirect stdout and stderr to console
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+        except Exception:
+            pass  # Continue without console if allocation fails
+    
     try:
-        print("Uninstalling Genie hooks...")
+        print("Uninstalling SecretGenie hooks...")
+        sys.stdout.flush()
         
         # Remove Git configuration
         print("Removing Git configuration...")
+        sys.stdout.flush()
         
         run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'], check=False)
@@ -1741,14 +1801,13 @@ def uninstall_hooks_cli():
         
         # Record uninstallation
         try:
-            # Import here to avoid issues if the module is missing
-            hooks_path = os.path.expanduser('~/.genie/hooks')
-            sys.path.insert(0, hooks_path)
-            from installation_tracker import record_uninstallation
+            from hooks.installation_tracker import record_uninstallation
             record_uninstallation()
             print("Uninstallation recorded in tracking system.")
+            sys.stdout.flush()
         except Exception as e:
             print(f"Warning: Could not record uninstallation: {e}")
+            sys.stdout.flush()
         
         # Clean up scripts in user's bin directory
         if platform.system().lower() != 'windows':
@@ -1760,18 +1819,22 @@ def uninstall_hooks_cli():
                 if os.path.exists(git_scan_config_path):
                     os.remove(git_scan_config_path)
                     print(f"Removed {git_scan_config_path}")
+                    sys.stdout.flush()
                 
                 if os.path.exists(git_scan_repo_path):
                     os.remove(git_scan_repo_path)
                     print(f"Removed {git_scan_repo_path}")
+                    sys.stdout.flush()
             except Exception as e:
                 print(f"Warning: Could not clean up user bin scripts: {e}")
+                sys.stdout.flush()
         
         # Remove .genie directory
         genie_dir = os.path.expanduser('~/.genie')
         if os.path.exists(genie_dir):
             shutil.rmtree(genie_dir)
             print("Removed .genie directory")
+            sys.stdout.flush()
         
         # Verify uninstallation
         hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
@@ -1779,25 +1842,28 @@ def uninstall_hooks_cli():
         
         if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip():
             print(f"Warning: Git hooks path still set to: {hooks_path_result.stdout.strip()}")
+            sys.stdout.flush()
         
-        print("✓ Genie hooks uninstalled successfully!")
+        print("✓ SecretGenie hooks uninstalled successfully!")
         print("Git configuration has been reset to default.")
+        sys.stdout.flush()
         
         return True
         
     except Exception as e:
         print(f"ERROR: Failed to uninstall hooks: {str(e)}")
+        sys.stdout.flush()
         return False
 
 if __name__ == '__main__':
     import argparse
     
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Genie - Secret Scanning Tool')
+    parser = argparse.ArgumentParser(description='SecretGenie - Secret Scanning Tool')
     parser.add_argument('--install', action='store_true',
-                        help='Install Genie hooks without GUI')
+                        help='Install SecretGenie hooks without GUI')
     parser.add_argument('--uninstall', action='store_true',
-                        help='Uninstall Genie hooks without GUI')
+                        help='Uninstall SecretGenie hooks without GUI')
     
     # Parse arguments, but be flexible about the format
     args = []

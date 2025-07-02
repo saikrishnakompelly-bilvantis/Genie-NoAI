@@ -17,10 +17,10 @@ VSVersionInfo(
           [StringStruct(u'CompanyName', u'Your Name'),
            StringStruct(u'FileDescription', u'A PyQt-based Secret Scanner Application'),
            StringStruct(u'FileVersion', u'1.0.0'),
-           StringStruct(u'InternalName', u'Genie-Secrets'),
+           StringStruct(u'InternalName', u'SecretGenie'),
            StringStruct(u'LegalCopyright', u'Copyright (c) 2024'),
-           StringStruct(u'OriginalFilename', u'Genie-Secrets.exe'),
-           StringStruct(u'ProductName', u'Genie-Secrets'),
+           StringStruct(u'OriginalFilename', u'SecretGenie.exe'),
+           StringStruct(u'ProductName', u'SecretGenie'),
            StringStruct(u'ProductVersion', u'1.0.0')])
       ]
     ),

@@ -45,7 +45,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='src/assets/logo.ico'  # Make sure to convert your logo.png to logo.ico
+    icon='src/assets/logo.ico',  # Make sure to convert your logo.png to logo.ico
+    version='file_version_info.txt'  # Add version information for Windows
 )
 
 # Only create the app bundle on macOS

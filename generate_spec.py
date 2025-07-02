@@ -75,7 +75,8 @@ exe = EXE(pyz,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='src/assets/logo.ico'
+    icon='src/assets/logo.ico',
+    version='file_version_info.txt'  # Add version information for Windows
 )
 
 # Only create the app bundle on macOS
