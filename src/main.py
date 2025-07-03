@@ -1856,43 +1856,63 @@ def uninstall_hooks_cli():
         return False
 
 if __name__ == '__main__':
-    import argparse
+    # Check for CLI mode FIRST before importing any GUI components
+    cli_mode = False
     
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='SecretGenie - Secret Scanning Tool')
-    parser.add_argument('--install', action='store_true',
-                        help='Install SecretGenie hooks without GUI')
-    parser.add_argument('--uninstall', action='store_true',
-                        help='Uninstall SecretGenie hooks without GUI')
-    
-    # Parse arguments, but be flexible about the format
-    args = []
+    # Check if any of the command line arguments indicate CLI mode
     for arg in sys.argv[1:]:
-        if arg.startswith('/'):
-            args.append('--' + arg[1:])
-        else:
-            args.append(arg)
+        if arg.lower() in ['/install', '--install', '/uninstall', '--uninstall', '-install', '-uninstall']:
+            cli_mode = True
+            break
     
-    try:
-        parsed_args = parser.parse_args(args)
-    except SystemExit:
-        # If argument parsing fails, fall back to GUI mode
-        parsed_args = None
+    # Also check for help arguments
+    for arg in sys.argv[1:]:
+        if arg.lower() in ['/help', '--help', '-h', '/?']:
+            cli_mode = True
+            break
     
-    # Handle command line operations
-    if parsed_args and (parsed_args.install or parsed_args.uninstall):
-        # Command line mode
+    if cli_mode:
+        # CLI Mode - Handle without GUI
+        print("SecretGenie - Secret Scanning Tool")
+        print("Running in CLI mode...")
+        
+        # Determine which action to take
+        install_requested = False
+        uninstall_requested = False
+        help_requested = False
+        
+        for arg in sys.argv[1:]:
+            if arg.lower() in ['/install', '--install', '-install']:
+                install_requested = True
+            elif arg.lower() in ['/uninstall', '--uninstall', '-uninstall']:
+                uninstall_requested = True
+            elif arg.lower() in ['/help', '--help', '-h', '/?']:
+                help_requested = True
+        
+        if help_requested:
+            print("\nUsage:")
+            print("  SecretGenie.exe /install    - Install hooks without GUI")
+            print("  SecretGenie.exe /uninstall  - Uninstall hooks without GUI")
+            print("  SecretGenie.exe /help       - Show this help message")
+            print("  SecretGenie.exe             - Open GUI interface")
+            sys.exit(0)
+        
+        # Execute the requested action
         success = False
         
-        if parsed_args.install:
+        if install_requested:
             success = install_hooks_cli()
-        elif parsed_args.uninstall:
+        elif uninstall_requested:
             success = uninstall_hooks_cli()
+        else:
+            print("ERROR: No valid command specified.")
+            print("Use /install, /uninstall, or /help")
+            success = False
         
         # Exit with appropriate code
         sys.exit(0 if success else 1)
     
-    # GUI mode (original code)
+    # GUI Mode - Only initialize QApplication if not in CLI mode
     try:
         # Initialize QApplication first
         app = QApplication(sys.argv)
