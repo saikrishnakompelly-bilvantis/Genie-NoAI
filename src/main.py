@@ -854,7 +854,18 @@ Categories=Utility;Development;
                     )
                 return
             
-            # Create necessary directories
+            # Create .genie directory if it doesn't exist (preserving existing content)
+            os.makedirs(genie_dir, exist_ok=True)
+            
+            # Remove and recreate only hooks and secret_scan directories for clean installation
+            if os.path.exists(hooks_dir):
+                shutil.rmtree(hooks_dir)
+                logging.info(f"Removed existing hooks directory: {hooks_dir}")
+            if os.path.exists(secret_scan_dir):
+                shutil.rmtree(secret_scan_dir)
+                logging.info(f"Removed existing secret_scan directory: {secret_scan_dir}")
+            
+            # Create the specific directories we need
             os.makedirs(hooks_dir, exist_ok=True)
             os.makedirs(secret_scan_dir, exist_ok=True)
             
@@ -1158,32 +1169,13 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
                 self.show_dependency_error("Git Not Found", "Git is not installed or not in your PATH. Cannot uninstall hooks.")
                 return
                 
-            # Remove Git configurations first
-            if platform.system().lower() == 'windows':
-                run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
-                            check=False)  # Don't check as it might not exist
-            else:
-                # Non-Windows platforms don't have creationflags
-                run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'],
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
-                            check=False)  # Don't check as it might not exist
-                
-                run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
-                            check=False)  # Don't check as it might not exist
+            # Remove our Git aliases (but preserve core.hooksPath for other tools)
+            logging.info("Removing Genie-specific Git aliases...")
+            run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'], check=False)
+            run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'], check=False) 
+            run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'], check=False)
+            
+            # Note: We preserve core.hooksPath to avoid breaking other security tools
             
             # Record uninstallation before removing the directory
             try:
@@ -1223,49 +1215,25 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
             except Exception as e:
                 logging.warning(f"Could not clean up user bin scripts: {e}")
             
-            # Remove .genie directory completely
+            # Remove only hooks and secret_scan directories (preserve other .genie content)
             genie_dir = os.path.expanduser('~/.genie')
-            if os.path.exists(genie_dir):
-                import shutil
-                shutil.rmtree(genie_dir)
+            hooks_dir = os.path.join(genie_dir, 'hooks')
+            secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
             
-            # Verify uninstallation
-            if os.path.exists(genie_dir):
-                raise Exception("Failed to remove .genie directory")
-                
-            if platform.system().lower() == 'windows':
-                hooks_path = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                        capture_output=True, 
-                                        text=True).stdout.strip()
-                
-                scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                            capture_output=True, 
-                                            text=True).stdout.strip()
-                
-                scan_config_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
-                                             capture_output=True, 
-                                             text=True).stdout.strip()
-            else:
-                hooks_path = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                        capture_output=True, 
-                                        text=True).stdout.strip()
-                
-                scan_repo_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-repo'],
-                                            capture_output=True, 
-                                            text=True).stdout.strip()
-                
-                scan_config_alias = run_subprocess(['git', 'config', '--global', '--get', 'alias.scan-config'],
-                                             capture_output=True, 
-                                             text=True).stdout.strip()
+            if os.path.exists(hooks_dir):
+                shutil.rmtree(hooks_dir)
+                logging.info("Removed hooks directory")
             
-            if hooks_path:
-                raise Exception("Git hooks path still set")
+            if os.path.exists(secret_scan_dir):
+                shutil.rmtree(secret_scan_dir)
+                logging.info("Removed secret_scan directory")
+            
+            # Verify uninstallation of core components
+            if os.path.exists(hooks_dir) or os.path.exists(secret_scan_dir):
+                raise Exception("Failed to remove hooks or secret_scan directories")
                 
-            if scan_repo_alias:
-                raise Exception("Git scan-repo alias still set")
-                
-            if scan_config_alias:
-                raise Exception("Git scan-config alias still set")
+            # Note: We only verify that our files are removed, not Git aliases since
+            # alias removal is non-critical and shouldn't block successful uninstallation
             
             # Handle success based on UI mode
             if self.is_restricted_env:
@@ -1280,7 +1248,7 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
                 # For standard web-based UI
                 self.show_message(
                     'Uninstallation Complete',
-                    'Genie hooks have been successfully removed.',
+                    'Genie hooks have been successfully removed.\n\nNote: Hooks directory configuration preserved for other security tools.',
                     'success',
                     lambda: (setattr(self, 'is_first_run', True), self.load_welcome_ui())
                 )
@@ -1769,13 +1737,19 @@ def install_hooks_cli():
         print(f"Copying files from {hooks_source}...")
         sys.stdout.flush()
         
-        # Remove existing directories if they exist
+        # Create .genie directory if it doesn't exist (preserving existing content)
+        genie_dir = os.path.expanduser('~/.genie')
+        os.makedirs(genie_dir, exist_ok=True)
+        
+        # Remove and recreate only hooks and secret_scan directories for clean installation
         if os.path.exists(hooks_path):
             shutil.rmtree(hooks_path)
+            print(f"Removed existing hooks directory: {hooks_path}")
         if os.path.exists(secret_scan_path):
             shutil.rmtree(secret_scan_path)
+            print(f"Removed existing secret_scan directory: {secret_scan_path}")
         
-        # Create directories
+        # Create the specific directories we need
         os.makedirs(hooks_path, exist_ok=True)
         os.makedirs(secret_scan_path, exist_ok=True)
         
@@ -1909,14 +1883,17 @@ def uninstall_hooks_cli():
         print("Uninstalling SecretGenie hooks...")
         sys.stdout.flush()
         
-        # Remove Git configuration
-        print("Removing Git configuration...")
+        # Remove our Git aliases (but preserve core.hooksPath for other tools)
+        print("Removing Genie-specific Git aliases...")
         sys.stdout.flush()
         
-        run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'], check=False)
+        
+        # Note: We preserve core.hooksPath to avoid breaking other security tools
+        print("Preserving hooks directory configuration for compatibility...")
+        sys.stdout.flush()
         
         # Record uninstallation
         try:
@@ -1960,23 +1937,24 @@ def uninstall_hooks_cli():
                 print(f"Warning: Could not clean up user bin scripts: {e}")
                 sys.stdout.flush()
         
-        # Remove .genie directory
+        # Remove only hooks and secret_scan directories (preserve other .genie content)
         genie_dir = os.path.expanduser('~/.genie')
-        if os.path.exists(genie_dir):
-            shutil.rmtree(genie_dir)
-            print("Removed .genie directory")
+        hooks_dir = os.path.join(genie_dir, 'hooks')
+        secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
+        
+        if os.path.exists(hooks_dir):
+            shutil.rmtree(hooks_dir)
+            print("Removed hooks directory")
             sys.stdout.flush()
         
-        # Verify uninstallation
-        hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                        capture_output=True, text=True, check=False)
-        
-        if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip():
-            print(f"Warning: Git hooks path still set to: {hooks_path_result.stdout.strip()}")
+        if os.path.exists(secret_scan_dir):
+            shutil.rmtree(secret_scan_dir)
+            print("Removed secret_scan directory")
             sys.stdout.flush()
         
         print("✓ SecretGenie hooks uninstalled successfully!")
-        print("Git configuration has been reset to default.")
+        print("Note: Hooks directory configuration preserved for other security tools.")
+        print("Note: .genie directory preserved with any existing configurations.")
         sys.stdout.flush()
         
         return True
