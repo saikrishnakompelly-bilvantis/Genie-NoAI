@@ -545,6 +545,32 @@ class ValidationWindow:
         )
         policy_label.pack(pady=(0, 10))
         
+        # Add disclaimer section
+        disclaimer_frame = ttk.Frame(main_container)
+        disclaimer_frame.pack(fill=tk.X, pady=(10, 20))
+        
+        disclaimer_header = ttk.Label(
+            disclaimer_frame,
+            text="⚠️ DISCLAIMER",
+            font=('Helvetica', 12, 'bold'),
+            foreground='#856404'
+        )
+        disclaimer_header.pack(pady=(0, 8))
+        
+        disclaimer_text = ("This tool identifies potential code secrets through regex, dictionary comparisons, and entropy analysis. "
+                          "Despite efforts to accurately pinpoint high-risk exposures, results may contain false positives or overlook certain secrets. "
+                          "Users should apply discretion and judgement when assessing scan results. "
+                          "It is the user's duty to verify and manage flagged content appropriately.")
+        disclaimer_label = ttk.Label(
+            disclaimer_frame,
+            text=disclaimer_text,
+            wraplength=800,
+            justify=tk.CENTER,
+            font=('Helvetica', 9),
+            foreground='#856404'
+        )
+        disclaimer_label.pack(pady=(0, 10))
+        
         content_frame = ttk.Frame(main_container)
         content_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
         

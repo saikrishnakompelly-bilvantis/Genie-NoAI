@@ -581,6 +581,11 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
                 template = template.replace('\n            margin-top', 'margin-top')
                 
                 # Format the HTML content with values
+                disclaimer_text = """<div class="disclaimer">
+            <h3>⚠️ DISCLAIMER</h3>
+            <p>This tool identifies potential code secrets through regex, dictionary comparisons, and entropy analysis. Despite efforts to accurately pinpoint high-risk exposures, results may contain false positives or overlook certain secrets. Users should apply discretion and judgement when assessing scan results. It is the user's duty to verify and manage flagged content appropriately.</p>
+        </div>"""
+                
                 format_args = {
                     'title': HTML_CONFIG['title'],
                     'primary_color': HTML_CONFIG['styles']['primary_color'],
@@ -591,7 +596,8 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
                     'git_metadata': git_metadata,
                     'diff_secrets_table_rows': diff_secrets_table_rows,
                     'repo_secrets_table_rows': repo_secrets_table_rows,
-                    'disallowed_files_section': disallowed_files_section
+                    'disallowed_files_section': disallowed_files_section,
+                    'disclaimer': disclaimer_text
                 }
                 
                 # Add fallback for common missing keys
@@ -648,6 +654,9 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
         .header-info {{ background: #f1f8ff; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #0056b3; }}
         .header-info p {{ margin: 5px 0; color: #666; }}
         .header-info strong {{ color: #333; margin-right: 5px; }}
+        .disclaimer {{ background: #fff3cd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border-left: 4px solid #ffc107; border: 1px solid #ffeaa7; }}
+        .disclaimer h3 {{ color: #856404; margin-top: 0; margin-bottom: 10px; }}
+        .disclaimer p {{ margin: 0; color: #856404; font-weight: 500; line-height: 1.5; }}
         table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
         th, td {{ padding: 12px; text-align: left; border: 1px solid #ddd; }}
         th {{ background: #0056b3; color: white; }}
@@ -691,6 +700,11 @@ def generate_simple_html_report(diff_secrets, repo_secrets, git_metadata):
             <p><strong>Branch:</strong> {branch}</p>
             <p><strong>Commit Hash:</strong> {commit_hash}</p>
             <p><strong>Timestamp:</strong> {timestamp}</p>
+        </div>
+
+        <div class="disclaimer">
+            <h3>⚠️ DISCLAIMER</h3>
+            <p>This tool identifies potential code secrets through regex, dictionary comparisons, and entropy analysis. Despite efforts to accurately pinpoint high-risk exposures, results may contain false positives or overlook certain secrets. Users should apply discretion and judgement when assessing scan results. It is the user's duty to verify and manage flagged content appropriately.</p>
         </div>
 
         <div class="tab-container">

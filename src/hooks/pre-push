@@ -1,23 +1,39 @@
 #!/usr/bin/env sh
 
-# Get the directory where this script is located
-SCRIPT_DIR="$(git config --global --get core.hookspath)"
+# Function to check if a git command exists
+command_exists() {
+    git help -a | grep -q "^  $1$" 2>/dev/null || git config --get-regexp "^alias\.$1$" >/dev/null 2>&1
+}
 
-# Convert Windows path separators if needed
-SCRIPT_DIR=$(echo "$SCRIPT_DIR" | sed 's/\\/\//g')
+# Function to run a git command if it exists
+run_if_exists() {
+    local cmd="$1"
+    if command_exists "$cmd"; then
+        echo "Running git $cmd..."
+        git "$cmd"
+        local exit_code=$?
+        if [ $exit_code -ne 0 ]; then
+            echo "git $cmd failed with exit code $exit_code"
+            return $exit_code
+        fi
+        echo "git $cmd completed successfully"
+    else
+        echo "git $cmd command not found, skipping..."
+    fi
+    return 0
+}
 
-# Make the Python script executable (Unix-like systems only)
-if [ "$(uname)" != "MINGW"* ] && [ "$(uname)" != "MSYS"* ]; then
-    chmod +x "$SCRIPT_DIR/pre_push.py"
-fi
+echo "Starting pre-push security checks..."
 
-# Run the Python script using python3 or python, whichever is available
-if command -v python3 >/dev/null 2>&1; then
-    python3 "$SCRIPT_DIR/pre_push.py"
-else
-    python "$SCRIPT_DIR/pre_push.py"
-fi
-exit_code=$?
+# Run the security scanning commands in sequence
+run_if_exists "secret-scan"
+if [ $? -ne 0 ]; then exit $?; fi
 
-# Exit with the same code as the Python script
-exit $exit_code 
+run_if_exists "commit-scan"  
+if [ $? -ne 0 ]; then exit $?; fi
+
+run_if_exists "api-guard"
+if [ $? -ne 0 ]; then exit $?; fi
+
+echo "All pre-push security checks completed successfully"
+exit 0 

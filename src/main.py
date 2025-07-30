@@ -858,7 +858,7 @@ Categories=Utility;Development;
                 raise FileNotFoundError(f"Hooks source directory not found: {hooks_source}")
             
             # Copy hook files
-            hook_files = ['pre-push', 'pre_push.py', 'scan-config']
+            hook_files = ['pre-push', 'pre_push.py', 'scan-config', 'secret-scan']
             for hook_file in hook_files:
                 source_file = hooks_source / hook_file
                 target_file = Path(hooks_dir) / hook_file
@@ -896,6 +896,8 @@ Categories=Utility;Development;
                                 check=False)  # Don't check as it might not exist
                     run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
                                 check=False)  # Don't check as it might not exist
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
+                                check=False)  # Don't check as it might not exist
                     
                     # Set up new Git hooks configuration
                     run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
@@ -936,6 +938,25 @@ Categories=Utility;Development;
                             logging.warning(f"scan-config alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
                     except subprocess.CalledProcessError as e:
                         logging.error(f"Failed to set scan-config alias: {e}")
+                        # Continue with installation, as this is not critical
+                    
+                    # Create git alias for secret-scan with absolute path
+                    secret_scan_path = os.path.join(hooks_dir, 'secret-scan')
+                    # Use the full command with bash to ensure the script is executed correctly
+                    alias_cmd = f'!bash "{secret_scan_path}"'
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.secret-scan', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.secret-scan'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("secret-scan alias verified successfully")
+                        else:
+                            logging.warning(f"secret-scan alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set secret-scan alias: {e}")
                         # Continue with installation, as this is not critical
                 else:
                     # macOS/Linux code without creationflags
@@ -946,6 +967,8 @@ Categories=Utility;Development;
                                 check=False)  # Don't check as it might not exist
                     run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
                                 check=False)  # Don't check as it might not exist
+                    run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
+                                check=False)  # Don't check as it might not exist
                     
                     # Set up new Git hooks configuration
                     run_subprocess(['git', 'config', '--global', 'core.hooksPath', hooks_dir], 
@@ -986,6 +1009,25 @@ Categories=Utility;Development;
                             logging.warning(f"scan-config alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
                     except subprocess.CalledProcessError as e:
                         logging.error(f"Failed to set scan-config alias: {e}")
+                        # Continue with installation, as this is not critical
+                    
+                    # Create git alias for secret-scan with absolute path
+                    secret_scan_path = os.path.join(hooks_dir, 'secret-scan')
+                    # Use the full command with bash to ensure the script is executed correctly
+                    alias_cmd = f'!bash "{secret_scan_path}"'
+                    try:
+                        run_subprocess(['git', 'config', '--global', 'alias.secret-scan', alias_cmd], 
+                                    check=True)
+                        
+                        # Verify the alias was set correctly
+                        result = run_subprocess(['git', 'config', '--global', '--get', 'alias.secret-scan'],
+                                            capture_output=True, text=True, check=True)
+                        if result.stdout.strip() == alias_cmd:
+                            logging.info("secret-scan alias verified successfully")
+                        else:
+                            logging.warning(f"secret-scan alias verification failed. Expected: {alias_cmd}, Got: {result.stdout.strip()}")
+                    except subprocess.CalledProcessError as e:
+                        logging.error(f"Failed to set secret-scan alias: {e}")
                         # Continue with installation, as this is not critical
                 
                 # Create a config file to store the hooks directory path and installation status
@@ -1025,6 +1067,16 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
 """)
                     os.chmod(git_scan_repo_path, 0o755)
                     logging.info(f"Created git-scan-repo in {user_bin_dir}")
+                    
+                    # Create git-secret-scan script
+                    git_secret_scan_path = os.path.join(user_bin_dir, 'git-secret-scan')
+                    with open(git_secret_scan_path, 'w') as f:
+                        f.write(f"""#!/bin/bash
+# Generated by Genie installer
+exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
+""")
+                    os.chmod(git_secret_scan_path, 0o755)
+                    logging.info(f"Created git-secret-scan in {user_bin_dir}")
                     
                 except Exception as e:
                     logging.warning(f"Could not create user bin scripts: {e}. Alias-based commands will still work.")
@@ -1095,6 +1147,9 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
                 
                 run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
                             check=False)  # Don't check as it might not exist
+                
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
+                            check=False)  # Don't check as it might not exist
             else:
                 # Non-Windows platforms don't have creationflags
                 run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], 
@@ -1104,6 +1159,9 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
                             check=False)  # Don't check as it might not exist
                 
                 run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'],
+                            check=False)  # Don't check as it might not exist
+                
+                run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'],
                             check=False)  # Don't check as it might not exist
             
             # Record uninstallation before removing the directory
@@ -1130,6 +1188,12 @@ exec bash "{os.path.join(hooks_dir, 'scan-repo')}" "$@"
                 if os.path.exists(git_scan_repo_path):
                     os.remove(git_scan_repo_path)
                     logging.info(f"Removed {git_scan_repo_path}")
+                
+                # Remove git-secret-scan if it exists
+                git_secret_scan_path = os.path.join(user_bin_dir, 'git-secret-scan')
+                if os.path.exists(git_secret_scan_path):
+                    os.remove(git_secret_scan_path)
+                    logging.info(f"Removed {git_secret_scan_path}")
             except Exception as e:
                 logging.warning(f"Could not clean up user bin scripts: {e}")
             
@@ -1708,9 +1772,11 @@ def install_hooks_cli():
         # Set up aliases
         scan_repo_cmd = f'!python "{os.path.join(hooks_path, "scan_repo.py")}"'
         scan_config_cmd = f'!python "{os.path.join(hooks_path, "scan_config.py")}"'
+        secret_scan_cmd = f'!bash "{os.path.join(hooks_path, "secret-scan")}"'
         
         run_subprocess(['git', 'config', '--global', 'alias.scan-repo', scan_repo_cmd], check=True)
         run_subprocess(['git', 'config', '--global', 'alias.scan-config', scan_config_cmd], check=True)
+        run_subprocess(['git', 'config', '--global', 'alias.secret-scan', secret_scan_cmd], check=True)
         
         # Create user bin directory and scripts (for Unix-like systems)
         if platform.system().lower() != 'windows':
@@ -1734,6 +1800,15 @@ python "{os.path.join(hooks_path, 'scan_repo.py')}" "$@"
             with open(git_scan_repo_path, 'w') as f:
                 f.write(git_scan_repo_content)
             os.chmod(git_scan_repo_path, 0o755)
+            
+            # Create git-secret-scan script
+            git_secret_scan_content = f'''#!/bin/bash
+bash "{os.path.join(hooks_path, 'secret-scan')}" "$@"
+'''
+            git_secret_scan_path = os.path.join(user_bin_dir, 'git-secret-scan')
+            with open(git_secret_scan_path, 'w') as f:
+                f.write(git_secret_scan_content)
+            os.chmod(git_secret_scan_path, 0o755)
         
         # Record installation
         try:
@@ -1798,6 +1873,7 @@ def uninstall_hooks_cli():
         run_subprocess(['git', 'config', '--global', '--unset', 'core.hooksPath'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-repo'], check=False)
         run_subprocess(['git', 'config', '--global', '--unset', 'alias.scan-config'], check=False)
+        run_subprocess(['git', 'config', '--global', '--unset', 'alias.secret-scan'], check=False)
         
         # Record uninstallation
         try:
@@ -1824,6 +1900,12 @@ def uninstall_hooks_cli():
                 if os.path.exists(git_scan_repo_path):
                     os.remove(git_scan_repo_path)
                     print(f"Removed {git_scan_repo_path}")
+                    sys.stdout.flush()
+                
+                git_secret_scan_path = os.path.join(user_bin_dir, 'git-secret-scan')
+                if os.path.exists(git_secret_scan_path):
+                    os.remove(git_secret_scan_path)
+                    print(f"Removed {git_secret_scan_path}")
                     sys.stdout.flush()
             except Exception as e:
                 print(f"Warning: Could not clean up user bin scripts: {e}")
