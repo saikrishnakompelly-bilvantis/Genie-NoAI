@@ -39,7 +39,16 @@ def run_subprocess(cmd, **kwargs):
 
 # Include our installation_tracker module
 try:
-    from hooks.installation_tracker import record_installation, record_uninstallation
+    # Try to import from the new location first, then fall back to old location
+    try:
+        secret_scan_path = os.path.expanduser('~/.genie/secret_scan')
+        if os.path.exists(secret_scan_path):
+            sys.path.insert(0, secret_scan_path)
+            from installation_tracker import record_installation, record_uninstallation
+        else:
+            raise ImportError("New location not found")
+    except ImportError:
+        from hooks.installation_tracker import record_installation, record_uninstallation
 except ImportError:
     # Handle the case where the module might not be available yet
     record_installation = record_uninstallation = lambda: None
@@ -804,6 +813,7 @@ Categories=Utility;Development;
             home_dir = os.path.expanduser('~')
             genie_dir = os.path.join(home_dir, '.genie')
             hooks_dir = os.path.join(genie_dir, 'hooks')
+            secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
             
             # Check if hooks are already installed
             config_file = os.path.join(genie_dir, 'config')
@@ -846,6 +856,7 @@ Categories=Utility;Development;
             
             # Create necessary directories
             os.makedirs(hooks_dir, exist_ok=True)
+            os.makedirs(secret_scan_dir, exist_ok=True)
             
             # Get the correct hooks source directory using get_hooks_path
             hooks_source = self.get_hooks_path()
@@ -857,7 +868,7 @@ Categories=Utility;Development;
             if not hooks_source.exists():
                 raise FileNotFoundError(f"Hooks source directory not found: {hooks_source}")
             
-            # Copy hook files
+            # Copy hook files (only actual git hooks)
             hook_files = ['pre-push', 'pre_push.py', 'scan-config', 'secret-scan']
             for hook_file in hook_files:
                 source_file = hooks_source / hook_file
@@ -877,12 +888,18 @@ Categories=Utility;Development;
                 else:
                     raise FileNotFoundError(f"Hook file not found: {source_file}")
             
-            # Copy commit_scripts directory if it exists
+            # Copy secret scanning files to separate directory
             commit_scripts_dir = hooks_source / 'commit_scripts'
             if commit_scripts_dir.exists():
-                target_scripts_dir = Path(hooks_dir) / 'commit_scripts'
-                shutil.copytree(str(commit_scripts_dir), str(target_scripts_dir), dirs_exist_ok=True)
-                logging.info(f"Copied commit_scripts directory: {commit_scripts_dir} -> {target_scripts_dir}")
+                shutil.copytree(str(commit_scripts_dir), str(secret_scan_dir), dirs_exist_ok=True)
+                logging.info(f"Copied secret_scan directory: {commit_scripts_dir} -> {secret_scan_dir}")
+            
+            # Copy installation tracker to secret_scan directory
+            installation_tracker_file = hooks_source / 'installation_tracker.py'
+            if installation_tracker_file.exists():
+                target_tracker_file = Path(secret_scan_dir) / 'installation_tracker.py'
+                shutil.copy2(str(installation_tracker_file), str(target_tracker_file))
+                logging.info(f"Copied installation tracker: {installation_tracker_file} -> {target_tracker_file}")
             
             # Set up Git configuration
             try:
@@ -1084,7 +1101,11 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
                 # Record installation in CSV and push to GitHub
                 try:
                     # Import here in case the module wasn't available at startup
-                    from hooks.installation_tracker import record_installation
+                    try:
+                        sys.path.insert(0, secret_scan_dir)
+                        from installation_tracker import record_installation
+                    except ImportError:
+                        from hooks.installation_tracker import record_installation
                     record_installation()
                     logging.info("Installation recorded in tracking CSV")
                 except Exception as e:
@@ -1167,7 +1188,12 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
             # Record uninstallation before removing the directory
             try:
                 # Import here in case the module wasn't available at startup
-                from hooks.installation_tracker import record_uninstallation
+                try:
+                    secret_scan_dir = os.path.expanduser('~/.genie/secret_scan')
+                    sys.path.insert(0, secret_scan_dir)
+                    from installation_tracker import record_uninstallation
+                except ImportError:
+                    from hooks.installation_tracker import record_uninstallation
                 record_uninstallation()
                 logging.info("Uninstallation recorded in tracking CSV")
             except Exception as e:
@@ -1702,6 +1728,7 @@ def install_hooks_cli():
         
         # Check if hooks are already installed
         hooks_path = os.path.expanduser('~/.genie/hooks')
+        secret_scan_path = os.path.expanduser('~/.genie/secret_scan')
         config_file = os.path.expanduser('~/.genie/config')
         
         # Check if already installed
@@ -1738,26 +1765,38 @@ def install_hooks_cli():
             sys.stdout.flush()
             return True
         
-        # Copy hooks to user directory
-        print(f"Copying hooks from {hooks_source} to {hooks_path}...")
+        # Copy files to user directory
+        print(f"Copying files from {hooks_source}...")
         sys.stdout.flush()
         
-        # Remove existing hooks directory if it exists
+        # Remove existing directories if they exist
         if os.path.exists(hooks_path):
             shutil.rmtree(hooks_path)
+        if os.path.exists(secret_scan_path):
+            shutil.rmtree(secret_scan_path)
         
-        # Create hooks directory
+        # Create directories
         os.makedirs(hooks_path, exist_ok=True)
+        os.makedirs(secret_scan_path, exist_ok=True)
         
-        # Copy hooks
-        for item in os.listdir(hooks_source):
-            src_path = os.path.join(hooks_source, item)
-            dst_path = os.path.join(hooks_path, item)
-            
-            if os.path.isdir(src_path):
-                shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
-            else:
+        # Copy hook files (only actual git hooks)
+        hook_files = ['pre-push', 'pre_push.py', 'scan-config', 'secret-scan']
+        for hook_file in hook_files:
+            src_path = os.path.join(hooks_source, hook_file)
+            dst_path = os.path.join(hooks_path, hook_file)
+            if os.path.exists(src_path):
                 shutil.copy2(src_path, dst_path)
+                os.chmod(dst_path, 0o755)
+        
+        # Copy secret scanning files
+        commit_scripts_source = os.path.join(hooks_source, 'commit_scripts')
+        if os.path.exists(commit_scripts_source):
+            shutil.copytree(commit_scripts_source, secret_scan_path, dirs_exist_ok=True)
+        
+        # Copy installation tracker
+        tracker_source = os.path.join(hooks_source, 'installation_tracker.py')
+        if os.path.exists(tracker_source):
+            shutil.copy2(tracker_source, os.path.join(secret_scan_path, 'installation_tracker.py'))
         
         print("Hooks copied successfully.")
         sys.stdout.flush()
@@ -1812,7 +1851,11 @@ bash "{os.path.join(hooks_path, 'secret-scan')}" "$@"
         
         # Record installation
         try:
-            from hooks.installation_tracker import record_installation
+            try:
+                sys.path.insert(0, secret_scan_path)
+                from installation_tracker import record_installation
+            except ImportError:
+                from hooks.installation_tracker import record_installation
             record_installation()
             print("Installation recorded in tracking system.")
             sys.stdout.flush()
@@ -1877,7 +1920,13 @@ def uninstall_hooks_cli():
         
         # Record uninstallation
         try:
-            from hooks.installation_tracker import record_uninstallation
+            # Try to import from the new location first, then fall back to old location
+            try:
+                secret_scan_path = os.path.expanduser('~/.genie/secret_scan')
+                sys.path.insert(0, secret_scan_path)
+                from installation_tracker import record_uninstallation
+            except ImportError:
+                from hooks.installation_tracker import record_uninstallation
             record_uninstallation()
             print("Uninstallation recorded in tracking system.")
             sys.stdout.flush()

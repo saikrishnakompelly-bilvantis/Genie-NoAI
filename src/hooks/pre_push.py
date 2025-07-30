@@ -19,13 +19,14 @@ logging.basicConfig(
 )
  
 SCRIPT_DIR = Path(__file__).parent
-sys.path.append(str(SCRIPT_DIR))
- 
-from commit_scripts.secretscan import SecretScanner
-from commit_scripts.utils import mask_secret
-from commit_scripts.secretscan import generate_html_report
+SECRET_SCAN_DIR = SCRIPT_DIR.parent / 'secret_scan'
+sys.path.append(str(SECRET_SCAN_DIR))
+
+from secretscan import SecretScanner
+from utils import mask_secret
+from secretscan import generate_html_report
 try:
-    from commit_scripts.scan_config import should_scan_diff, should_scan_repo, should_scan_changed_lines_only
+    from scan_config import should_scan_diff, should_scan_repo, should_scan_changed_lines_only
 except ImportError:
     # If scan_config is not available, default to scanning both
     def should_scan_diff():
@@ -304,7 +305,7 @@ def open_html_report(file_path):
         # Removed error log
         return False
  
-def create_window(title, width=800, height=600):
+def create_window(title, width=1000, height=1200):
     window = tk.Tk()
     window.title(title)
     
@@ -514,7 +515,7 @@ class ValidationWindow:
             
         self.current_page = 1
         
-        root = create_window(title, width=900, height=700)
+        root = create_window(title, width=1100, height=900)
         self.windows.append(root)
         
         main_container = ttk.Frame(root, padding="20")
@@ -540,7 +541,7 @@ class ValidationWindow:
         policy_label = ttk.Label(
             warning_frame,
             text=policy_text,
-            wraplength=800,
+            wraplength=1000,
             justify=tk.CENTER
         )
         policy_label.pack(pady=(0, 10))
@@ -564,7 +565,7 @@ class ValidationWindow:
         disclaimer_label = ttk.Label(
             disclaimer_frame,
             text=disclaimer_text,
-            wraplength=800,
+            wraplength=1000,
             justify=tk.CENTER,
             font=('Helvetica', 9),
             foreground='#856404'

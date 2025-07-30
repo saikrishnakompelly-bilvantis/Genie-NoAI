@@ -12,12 +12,12 @@ import math
 from typing import List, Dict, Union, Set, Tuple, Optional, Any
 from datetime import datetime
 import html
-from .config import (
+from config import (
     PATTERNS, HTML_CONFIG,
     EXCLUDED_EXTENSIONS, EXCLUDED_DIRECTORIES, ENTROPY_THRESHOLDS,
     should_exclude_file
 )
-from .utils import (
+from utils import (
     setup_logging, get_git_metadata,
     is_git_repo, has_unstaged_changes, get_git_diff,
     mask_secret, run_subprocess
@@ -561,9 +561,9 @@ def generate_html_report(output_path: str, **kwargs) -> bool:
         # Empty disallowed files section
         disallowed_files_section = ""
 
-        # Get the hooks directory (parent of the script)
-        hooks_dir = Path(__file__).parent.parent
-        template_path = hooks_dir / "commit_scripts" / "templates" / "report.html"
+        # Get the secret_scan directory (current directory since files will be in secret_scan/)
+        secret_scan_dir = Path(__file__).parent
+        template_path = secret_scan_dir / "templates" / "report.html"
         
         if not template_path.exists():
             # If template doesn't exist, use a simple built-in template
