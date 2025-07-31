@@ -328,31 +328,40 @@ Categories=Utility;Development;
             # logging.error(f"Traceback: {traceback.format_exc()}")
 
     def check_first_run(self):
-        """Check if this is the first time the application is run."""
-        config_dir = os.path.expanduser('~/.genie')
-        config_file = os.path.join(config_dir, 'config')
+        """Check if this is the first time the application is run by verifying actual file presence."""
+        genie_dir = os.path.expanduser('~/.genie')
+        hooks_dir = os.path.join(genie_dir, 'hooks')
+        secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
+        config_file = os.path.join(genie_dir, 'config')
         
-        # Check if config file exists and contains installation status
-        if os.path.exists(config_file):
+        # Check if our actual files exist (more reliable than just config file)
+        required_files = ['pre-push', 'pre_push.py', 'secret-scan']
+        all_files_exist = all(os.path.exists(os.path.join(hooks_dir, f)) for f in required_files)
+        
+        if all_files_exist and os.path.exists(secret_scan_dir):
+            # Files exist, this is not a first run
+            self.is_first_run = False
+            
+            # Update config file to reflect current state
             try:
-                with open(config_file, 'r') as f:
-                    config_content = f.read()
-                    if 'installed=true' in config_content:
-                        self.is_first_run = False
-                        return
+                os.makedirs(genie_dir, exist_ok=True)
+                with open(config_file, 'w') as f:
+                    f.write(f'hooks_dir={hooks_dir}\n')
+                    f.write('installed=true\n')
             except:
                 pass
-        
-        # If we reach here, either:
-        # - Config directory/file doesn't exist
-        # - Config file doesn't have installation status
-        # - There was an error reading the file
-        # In all these cases, we treat it as first run
-        self.is_first_run = True
-        
-        # Create config directory if it doesn't exist
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir, exist_ok=True)
+        else:
+            # Files don't exist, treat as first run
+            self.is_first_run = True
+            
+            # Update config file to reflect current state
+            try:
+                os.makedirs(genie_dir, exist_ok=True)
+                with open(config_file, 'w') as f:
+                    f.write(f'hooks_dir={hooks_dir}\n')
+                    f.write('installed=false\n')
+            except:
+                pass
 
     def load_appropriate_ui(self):
         # For HSBC builds, always use native UI based on first run status
@@ -815,29 +824,10 @@ Categories=Utility;Development;
             hooks_dir = os.path.join(genie_dir, 'hooks')
             secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
             
-            # Check if hooks are already installed
-            config_file = os.path.join(genie_dir, 'config')
-            is_already_installed = False
-            
-            if os.path.exists(config_file):
-                try:
-                    with open(config_file, 'r') as f:
-                        content = f.read()
-                        if 'installed=true' in content:
-                            is_already_installed = True
-                except:
-                    pass
-            
-            # Also check if hooks directory exists and has files
-            if not is_already_installed and os.path.exists(hooks_dir) and os.listdir(hooks_dir):
-                is_already_installed = True
-            
-            # Also check if Git hooks path is set to our directory
-            if not is_already_installed:
-                hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                                capture_output=True, text=True, check=False)
-                if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip() == hooks_dir:
-                    is_already_installed = True
+            # Check if hooks are already installed by verifying actual file presence
+            required_files = ['pre-push', 'pre_push.py', 'secret-scan']
+            all_files_exist = all(os.path.exists(os.path.join(hooks_dir, f)) for f in required_files)
+            is_already_installed = all_files_exist and os.path.exists(secret_scan_dir)
             
             if is_already_installed:
                 if self.is_restricted_env:
@@ -1694,32 +1684,13 @@ def install_hooks_cli():
         print("Dependencies check passed.")
         sys.stdout.flush()
         
-        # Check if hooks are already installed
+        # Check if hooks are already installed by verifying actual file presence
         hooks_path = os.path.expanduser('~/.genie/hooks')
         secret_scan_path = os.path.expanduser('~/.genie/secret_scan')
-        config_file = os.path.expanduser('~/.genie/config')
         
-        # Check if already installed
-        is_already_installed = False
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, 'r') as f:
-                    content = f.read()
-                    if 'installed=true' in content:
-                        is_already_installed = True
-            except:
-                pass
-        
-        # Also check if hooks directory exists and has files
-        if not is_already_installed and os.path.exists(hooks_path) and os.listdir(hooks_path):
-            is_already_installed = True
-        
-        # Also check if Git hooks path is set to our directory
-        if not is_already_installed:
-            hooks_path_result = run_subprocess(['git', 'config', '--global', '--get', 'core.hooksPath'],
-                                            capture_output=True, text=True, check=False)
-            if hooks_path_result.returncode == 0 and hooks_path_result.stdout.strip() == hooks_path:
-                is_already_installed = True
+        required_files = ['pre-push', 'pre_push.py', 'secret-scan']
+        all_files_exist = all(os.path.exists(os.path.join(hooks_path, f)) for f in required_files)
+        is_already_installed = all_files_exist and os.path.exists(secret_scan_path)
         
         if is_already_installed:
             print("✓ SecretGenie hooks are already installed!")
