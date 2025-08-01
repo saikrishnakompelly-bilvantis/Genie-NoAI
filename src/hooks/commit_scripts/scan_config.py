@@ -25,7 +25,8 @@ def get_config_path():
     """Get the path to the configuration file."""
     home_dir = os.path.expanduser('~')
     genie_dir = os.path.join(home_dir, '.genie')
-    return os.path.join(genie_dir, CONFIG_FILENAME)
+    secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
+    return os.path.join(secret_scan_dir, CONFIG_FILENAME)
 
 def get_exclusions_path():
     """Get the path to the exclusions JSON file."""
@@ -37,7 +38,8 @@ def get_exclusions_path():
     # Fall back to the global exclusions file
     home_dir = os.path.expanduser('~')
     genie_dir = os.path.join(home_dir, '.genie')
-    return os.path.join(genie_dir, EXCLUSIONS_FILENAME)
+    secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
+    return os.path.join(secret_scan_dir, EXCLUSIONS_FILENAME)
 
 def get_default_exclusions_path():
     """Get the path to the default exclusions file included with Genie."""

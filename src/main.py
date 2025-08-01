@@ -332,7 +332,7 @@ Categories=Utility;Development;
         genie_dir = os.path.expanduser('~/.genie')
         hooks_dir = os.path.join(genie_dir, 'hooks')
         secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
-        config_file = os.path.join(genie_dir, 'config')
+        config_file = os.path.join(secret_scan_dir, 'config')
         
         # Check if our actual files exist (more reliable than just config file)
         required_files = ['pre-push', 'pre_push.py', 'secret-scan']
@@ -344,7 +344,7 @@ Categories=Utility;Development;
             
             # Update config file to reflect current state
             try:
-                os.makedirs(genie_dir, exist_ok=True)
+                os.makedirs(secret_scan_dir, exist_ok=True)
                 with open(config_file, 'w') as f:
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
@@ -356,7 +356,7 @@ Categories=Utility;Development;
             
             # Update config file to reflect current state
             try:
-                os.makedirs(genie_dir, exist_ok=True)
+                os.makedirs(secret_scan_dir, exist_ok=True)
                 with open(config_file, 'w') as f:
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=false\n')
@@ -1049,7 +1049,7 @@ Categories=Utility;Development;
                         # Continue with installation, as this is not critical
                 
                 # Create a config file to store the hooks directory path and installation status
-                config_file = os.path.join(genie_dir, 'config')
+                config_file = os.path.join(secret_scan_dir, 'config')
                 with open(config_file, 'w') as f:
                     f.write(f'hooks_dir={hooks_dir}\n')
                     f.write('installed=true\n')
@@ -1210,16 +1210,16 @@ exec bash "{os.path.join(hooks_dir, 'secret-scan')}" "$@"
             hooks_dir = os.path.join(genie_dir, 'hooks')
             secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
             
-            if os.path.exists(hooks_dir):
-                shutil.rmtree(hooks_dir)
-                logging.info("Removed hooks directory")
+            # if os.path.exists(hooks_dir):
+            #     shutil.rmtree(hooks_dir)
+            #     logging.info("Removed hooks directory")
             
             if os.path.exists(secret_scan_dir):
                 shutil.rmtree(secret_scan_dir)
                 logging.info("Removed secret_scan directory")
             
             # Verify uninstallation of core components
-            if os.path.exists(hooks_dir) or os.path.exists(secret_scan_dir):
+            if os.path.exists(secret_scan_dir):
                 raise Exception("Failed to remove hooks or secret_scan directories")
                 
             # Note: We only verify that our files are removed, not Git aliases since
@@ -1809,7 +1809,7 @@ bash "{os.path.join(hooks_path, 'secret-scan')}" "$@"
             sys.stdout.flush()
         
         # Mark as installed
-        config_dir = os.path.expanduser('~/.genie')
+        config_dir = os.path.expanduser('~/.genie/secret_scan')
         config_file = os.path.join(config_dir, 'config')
         os.makedirs(config_dir, exist_ok=True)
         
