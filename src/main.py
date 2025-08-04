@@ -1913,10 +1913,10 @@ def uninstall_hooks_cli():
         hooks_dir = os.path.join(genie_dir, 'hooks')
         secret_scan_dir = os.path.join(genie_dir, 'secret_scan')
         
-        if os.path.exists(hooks_dir):
-            shutil.rmtree(hooks_dir)
-            print("Removed hooks directory")
-            sys.stdout.flush()
+        # if os.path.exists(hooks_dir):
+        #     shutil.rmtree(hooks_dir)
+        #     print("Removed hooks directory")
+        #     sys.stdout.flush()
         
         if os.path.exists(secret_scan_dir):
             shutil.rmtree(secret_scan_dir)
