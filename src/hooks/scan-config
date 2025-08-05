@@ -2,7 +2,7 @@
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONFIG_SCRIPT="$SCRIPT_DIR/commit_scripts/scan_config.py"
+CONFIG_SCRIPT="$SCRIPT_DIR/../secret_scan/scan_config.py"
 
 # Check if the script exists, show error only if it doesn't exist
 if [ ! -f "$CONFIG_SCRIPT" ]; then
