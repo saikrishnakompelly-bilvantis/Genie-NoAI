@@ -44,8 +44,9 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     (r'(?i)-----BEGIN\s+(?:RSA|OPENSSH|DSA|EC|PGP)\s+PRIVATE\s+KEY-----[A-Za-z0-9/\+=\s]+-----END', 'Private Key', {'require_entropy': False}),
     (r'(?i)ssh-rsa\s+[A-Za-z0-9/\+=]{32,}', 'SSH Key', {'require_entropy': False}),
     
-    # API Keys & Tokens - Medium entropy requirement
-    (r'(?i)api[_\-\.]?key[_\-\.]*\s*[=:]\s*[A-Za-z0-9_\-]{8,}', 'API Key', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    # API Keys & Tokens - More specific patterns to avoid false positives
+    # Only match when "api" and "key" are together, not just "key" alone
+    (r'(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[A-Za-z0-9_\-]{12,}', 'API Key', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5}),
     (r'(?i)bearer\s+[A-Za-z0-9_\-\.=]{20,}', 'Bearer Token', {'min_length': 20, 'require_entropy': True, 'threshold': 4.0}),
     (r'ghp_[0-9a-zA-Z]{36}', 'GitHub Personal Access Token', {'require_entropy': False}),  # Pattern is specific enough
     (r'github_pat_[0-9a-zA-Z]{82}', 'GitHub Fine-grained PAT', {'require_entropy': False}),  # Pattern is specific enough
@@ -56,18 +57,18 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     (r'eyJ[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}', 'JWT Token', {'require_entropy': False}),
     
     # Passwords - Lower entropy requirement
-    (r'(?i)password[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
-    (r'(?i)pass[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
-    (r'(?i)pwd[_\-\.]?\s*[=:]\s*[^\s]{6,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    (r'(?i)password[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    (r'(?i)pass[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    (r'(?i)pwd[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
     
-    # Generic Secrets - Medium entropy requirement
-    (r'(?i)(secret|token|credential)[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Generic Secret', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
+    # Generic Secrets - More specific patterns to avoid UI/programming terms
+    (r'(?i)(?:secret|token|credential)[_\-\.]?\s*[=:]\s*[^\s]{12,}', 'Generic Secret', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5}),
     
     # Database Connection Strings - No entropy check needed, pattern is sufficient
     (r'(?i)(jdbc|mongodb|postgresql|mysql).*:\/\/[^\/\s]+:[^\/\s@]+@[^\/\s]+', 'Database Connection String', {'require_entropy': False}),
     
     # Environment Variables - Check based on name
-    (r'(?i)export\s+(\w+)\s*=\s*[^\s]{6,}', 'Environment Variable', {'min_length': 6, 'check_name': True}),
+    (r'(?i)export\s+(\w+)\s*=\s*[^\s]{8,}', 'Environment Variable', {'min_length': 8, 'check_name': True}),
 ]
 
 # Load exclusions from configuration if available

@@ -58,10 +58,86 @@ class SecretScanner:
         name = name.lower()
         return any(term in name for term in suspicious_terms)
     
-    def should_skip_value(self, value: str) -> bool:
+    def is_file_specific_false_positive(self, value: str, file_path: str) -> bool:
+        """Check if a value is a false positive based on file type context."""
+        file_ext = file_path.lower().split('.')[-1] if '.' in file_path else ''
+        value_lower = value.lower()
+        
+        # JavaScript/JSP specific false positives
+        if file_ext in ('js', 'jsx', 'ts', 'tsx', 'jsp', 'jspx'):
+            # Common JavaScript/JSP patterns that are not secrets
+            js_patterns = {
+                # Event handling
+                'onclick', 'onload', 'onchange', 'onsubmit', 'onfocus', 'onblur',
+                'onkeydown', 'onkeyup', 'onkeypress', 'onmousedown', 'onmouseup',
+                
+                # DOM/UI related
+                'classname', 'classlist', 'innerhtml', 'innertext', 'textcontent',
+                'getattribute', 'setattribute', 'removeattribute', 'hasattribute',
+                'getelementbyid', 'getelementsbyclass', 'queryselector',
+                
+                # Framework specific (React, Angular, etc.)
+                'usestate', 'useeffect', 'usecontext', 'usememo', 'usecallback',
+                'componentdidmount', 'componentwillunmount', 'shouldcomponentupdate',
+                
+                # Common JSP/Servlet terms
+                'requestmapping', 'pathvariable', 'requestparam', 'modelandview',
+                'httpservletrequest', 'httpservletresponse', 'httpmethod',
+                
+                # Configuration and constants
+                'contextpath', 'servletpath', 'requesturi', 'querystring',
+                'sessionattribute', 'modelattribute', 'restcontroller'
+            }
+            
+            if value_lower in js_patterns:
+                return True
+                
+            # Check for common JavaScript/JSP variable patterns
+            if any(pattern in value_lower for pattern in [
+                'document.', 'window.', 'console.', 'jquery.', '$.', 'angular.',
+                'react.', 'vue.', 'this.', 'event.', 'target.', 'currenttarget.',
+                'response.', 'request.', 'session.', 'application.', 'pagecontext.'
+            ]):
+                return True
+        
+        # CSS specific false positives
+        elif file_ext in ('css', 'scss', 'sass', 'less'):
+            css_patterns = {
+                'background', 'foreground', 'border', 'margin', 'padding',
+                'position', 'display', 'visibility', 'overflow', 'float',
+                'fontfamily', 'fontsize', 'fontweight', 'textalign', 'textdecoration',
+                'lineheight', 'letterspacing', 'wordspacing', 'whitespace'
+            }
+            
+            if value_lower in css_patterns:
+                return True
+        
+        # XML/HTML specific false positives
+        elif file_ext in ('xml', 'html', 'htm', 'xhtml'):
+            html_patterns = {
+                'charset', 'viewport', 'description', 'keywords', 'author',
+                'generator', 'robots', 'canonical', 'stylesheet', 'javascript',
+                'alternate', 'shortcut', 'manifest', 'application'
+            }
+            
+            if value_lower in html_patterns:
+                return True
+        
+        return False
+    
+    def should_skip_value(self, value: str, file_path: str = '') -> bool:
         """Check if a value should be skipped (common non-secrets)."""
         # Skip very short values
         if len(value) < 6:
+            return True
+        
+        # Skip very long values (likely to be encoded data, minified code, or large objects)
+        # Real secrets are typically 6-500 characters
+        if len(value) > 500:
+            return True
+        
+        # Check file-specific false positives first
+        if file_path and self.is_file_specific_false_positive(value, file_path):
             return True
             
         # Skip common non-secret values
@@ -69,7 +145,74 @@ class SecretScanner:
             'true', 'false', 'none', 'null', 'undefined', 'localhost',
             'password', 'username', 'user', 'test', 'example', 'demo'
         }
-        return value.lower() in common_values
+        
+        # Common programming terms that are often false positives
+        programming_terms = {
+            # UI/UX related terms
+            'button', 'click', 'press', 'hover', 'focus', 'blur', 'select',
+            'submit', 'cancel', 'close', 'open', 'toggle', 'show', 'hide',
+            'display', 'visible', 'hidden', 'active', 'disabled', 'enabled',
+            
+            # Key-related terms that are not secrets
+            'primarykey', 'foreignkey', 'buttonkey', 'presskey', 'hotkey',
+            'shortcutkey', 'accesskey', 'tabkey', 'escapekey', 'enterkey',
+            'spacekey', 'arrowkey', 'functionkey', 'controlkey', 'shiftkey',
+            'altkey', 'metakey', 'keycode', 'keyname', 'keyvalue', 'keytype',
+            'keymap', 'keybind', 'keypress', 'keydown', 'keyup', 'keyboard',
+            
+            # Common variable values
+            'string', 'number', 'boolean', 'object', 'array', 'function',
+            'method', 'property', 'attribute', 'element', 'component',
+            'module', 'package', 'library', 'framework', 'plugin',
+            
+            # File paths and extensions
+            'public', 'private', 'static', 'assets', 'images', 'scripts',
+            'styles', 'components', 'templates', 'views', 'models',
+            'controllers', 'services', 'utils', 'helpers', 'config',
+            
+            # Database/SQL terms
+            'database', 'table', 'column', 'index', 'constraint', 'trigger',
+            'procedure', 'varchar', 'integer', 'datetime', 'timestamp',
+            
+            # Web development terms
+            'request', 'response', 'session', 'cookie', 'header', 'body',
+            'param', 'query', 'route', 'endpoint', 'middleware', 'controller',
+            'service', 'repository', 'entity', 'model', 'view', 'template',
+            
+            # Generic application terms
+            'application', 'version', 'production', 'development', 'staging',
+            'environment', 'profile', 'configuration', 'settings', 'options',
+            'preferences', 'defaults', 'constants', 'variables', 'parameters'
+        }
+        
+        # Check against all common values (case-insensitive)
+        value_lower = value.lower()
+        if value_lower in common_values or value_lower in programming_terms:
+            return True
+            
+        # Skip values that are clearly not secrets based on patterns
+        # URLs, file paths, common formats
+        if any(pattern in value_lower for pattern in [
+            'http://', 'https://', 'ftp://', 'file://',  # URLs
+            '.com', '.org', '.net', '.edu', '.gov',      # Domain endings
+            '.js', '.css', '.html', '.jsp', '.php',      # File extensions
+            '.png', '.jpg', '.gif', '.svg',              # Image extensions
+            '${', '#{', '{{',                            # Template syntax
+            'function(', 'return ', 'var ', 'let ', 'const ',  # Code keywords
+        ]):
+            return True
+            
+        # Skip values that look like configuration keys or identifiers
+        if value_lower.endswith(('key', 'id', 'name', 'type', 'mode', 'flag', 'option')):
+            # Check if it's likely a configuration key rather than a secret
+            if any(prefix in value_lower for prefix in [
+                'button', 'press', 'click', 'hover', 'focus', 'tab', 'escape',
+                'enter', 'space', 'arrow', 'function', 'control', 'shift',
+                'alt', 'meta', 'primary', 'foreign', 'unique', 'composite'
+            ]):
+                return True
+                
+        return False
     
     def scan_content(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for potential secrets."""
@@ -103,7 +246,7 @@ class SecretScanner:
                     value = match.group(0)
                     
                     # Skip common non-secrets
-                    if self.should_skip_value(value):
+                    if self.should_skip_value(value, file_path):
                         continue
                     
                     # Check minimum length if specified
@@ -160,7 +303,7 @@ class SecretScanner:
                     var_name, value = match.groups()
                     
                     # Skip common non-secrets
-                    if self.should_skip_value(value):
+                    if self.should_skip_value(value, file_path):
                         continue
                     
                     # Check if variable name suggests a secret
@@ -328,7 +471,7 @@ class SecretScanner:
                 value = match.group(0)
                 
                 # Skip common non-secrets
-                if self.should_skip_value(value):
+                if self.should_skip_value(value, file_path):
                     continue
                 
                 # Check minimum length if specified
@@ -381,7 +524,7 @@ class SecretScanner:
                 var_name, value = match.groups()
                 
                 # Skip common non-secrets
-                if self.should_skip_value(value):
+                if self.should_skip_value(value, file_path):
                     continue
                 
                 # Check if variable name suggests a secret

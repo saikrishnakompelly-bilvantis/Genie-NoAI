@@ -115,12 +115,20 @@ def create_default_exclusions(path):
             "*.log", "*.tmp", "*.DS_Store", "*.pdf",
             "*.png", "*.jpg", "*.jpeg", "*.gif",
             "*.xlsx", "*.xlsb", "*.xls", "*.csv",
-            "**/*test*.*", "**/*Test*.*"  # Files with "test" anywhere in the name
+            "**/*test*.*", "**/*Test*.*",  # Files with "test" anywhere in the name
+            "*.min.js", "*.min.css",      # Minified files often contain false positives
+            "*.bundle.js", "*.bundle.css", # Bundle files
+            "*.map",                      # Source map files
+            "*.lock",                     # Lock files (package-lock.json, yarn.lock, etc.)
+            "*.d.ts"                      # TypeScript definition files
         ],
         "directories": [
             "**/node_modules/**", "**/dist/**", "**/build/**",
             "**/target/**", "**/.git/**", "**/test/**", "**/tests/**",
-            "**/Test/**", "**/Tests/**", "**/*test*/**", "**/*Test*/**"  # Expanded patterns for test directories
+            "**/Test/**", "**/Tests/**", "**/*test*/**", "**/*Test*/**",  # Expanded patterns for test directories
+            "**/coverage/**", "**/reports/**",  # Test coverage and report directories
+            "**/.next/**", "**/.nuxt/**",       # Next.js and Nuxt.js build directories
+            "**/public/**", "**/static/**"      # Public/static asset directories that often contain non-secret data
         ],
         "additional_exclusions": []
     }
