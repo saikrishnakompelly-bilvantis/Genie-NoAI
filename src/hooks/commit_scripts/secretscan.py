@@ -51,12 +51,66 @@ class SecretScanner:
     
     def is_suspicious_env_var(self, name: str) -> bool:
         """Check if an environment variable name suggests it contains a secret."""
-        suspicious_terms = {
-            'token', 'secret', 'password', 'pwd', 'pass', 'key', 'auth',
-            'credential', 'api', 'private', 'cert', 'ssh'
+        name_lower = name.lower()
+        
+        # Common JSP/Java non-secret patterns that contain "key" but are not secrets
+        jsp_safe_patterns = {
+            # Method names and common JSP patterns
+            'getparameter', 'getattribute', 'setattribute', 'removeattribute',
+            'getproperty', 'setproperty', 'getvalue', 'setvalue',
+            'getitem', 'setitem', 'haskey', 'containskey',
+            'keyup', 'keydown', 'keypress', 'keycode', 'keyname',
+            
+            # Database and framework patterns
+            'primarykey', 'foreignkey', 'uniquekey', 'compositekey',
+            'partitionkey', 'sortkey', 'hashkey', 'indexkey',
+            
+            # UI and frontend patterns
+            'buttonkey', 'hotkey', 'shortcutkey', 'accesskey',
+            'presskey', 'clickkey', 'eventkey', 'inputkey',
+            
+            # Configuration and data patterns
+            'configkey', 'datakey', 'cachekey', 'storagekey',
+            'sessionkey', 'requestkey', 'paramkey', 'headerkey',
+            
+            # Framework specific
+            'actionkey', 'routekey', 'pathkey', 'templatekey',
+            'resourcekey', 'messagekey', 'propertykey', 'settingkey'
         }
-        name = name.lower()
-        return any(term in name for term in suspicious_terms)
+        
+        # If the name matches any safe pattern, it's not suspicious
+        if name_lower in jsp_safe_patterns:
+            return False
+        
+        # Check for method call patterns (ends with common method names)
+        method_suffixes = ['parameter', 'attribute', 'property', 'value', 'item']
+        if any(name_lower.endswith(suffix) for suffix in method_suffixes):
+            return False
+        
+        # Check for common JSP variable naming patterns
+        jsp_prefixes = ['get', 'set', 'has', 'is', 'contains', 'remove', 'add']
+        if any(name_lower.startswith(prefix) for prefix in jsp_prefixes):
+            return False
+        
+        # Original suspicious terms check
+        suspicious_terms = {
+            'token', 'secret', 'password', 'pwd', 'pass', 'auth',
+            'credential', 'private', 'cert', 'ssh'
+        }
+        
+        # Only check for suspicious terms that are not part of safe patterns
+        # and add "key" only if it's not in a safe context
+        if 'key' in name_lower:
+            # Only consider "key" suspicious if it's:
+            # 1. The entire word "key"
+            # 2. Or part of clearly suspicious patterns like "apikey", "secretkey"
+            if (name_lower == 'key' or 
+                any(term in name_lower for term in ['api', 'secret', 'private', 'auth', 'token'])):
+                return True
+            else:
+                return False
+        
+        return any(term in name_lower for term in suspicious_terms)
     
     def is_file_specific_false_positive(self, value: str, file_path: str) -> bool:
         """Check if a value is a false positive based on file type context."""
@@ -64,7 +118,7 @@ class SecretScanner:
         value_lower = value.lower()
         
         # JavaScript/JSP specific false positives
-        if file_ext in ('js', 'jsx', 'ts', 'tsx', 'jsp', 'jspx'):
+        if file_ext in ('js', 'jsx', 'ts', 'tsx', 'jsp', 'jspx', 'java'):
             # Common JavaScript/JSP patterns that are not secrets
             js_patterns = {
                 # Event handling
@@ -84,6 +138,27 @@ class SecretScanner:
                 'requestmapping', 'pathvariable', 'requestparam', 'modelandview',
                 'httpservletrequest', 'httpservletresponse', 'httpmethod',
                 
+                # JSP Method calls and parameters
+                'getparameter', 'getattribute', 'setattribute', 'removeattribute',
+                'getproperty', 'setproperty', 'getvalue', 'setvalue',
+                'getitem', 'setitem', 'haskey', 'containskey',
+                'getintparameter', 'getstringparameter', 'getbooleanparameter',
+                
+                # Common JSP parameter names that contain "key"
+                'userkey', 'sessionkey', 'requestkey', 'paramkey', 'configkey',
+                'messagekey', 'resourcekey', 'propertykey', 'datakey', 'itemkey',
+                'pagekey', 'formkey', 'fieldkey', 'inputkey', 'outputkey',
+                'sortkey', 'filterkey', 'searchkey', 'querykey', 'resultkey',
+                
+                # Database and persistence patterns
+                'primarykey', 'foreignkey', 'uniquekey', 'compositekey',
+                'partitionkey', 'indexkey', 'hashkey', 'entitykey',
+                
+                # UI and interaction patterns
+                'buttonkey', 'hotkey', 'shortcutkey', 'accesskey', 'tabkey',
+                'presskey', 'clickkey', 'eventkey', 'keycode', 'keyname',
+                'keyup', 'keydown', 'keypress', 'keyboard',
+                
                 # Configuration and constants
                 'contextpath', 'servletpath', 'requesturi', 'querystring',
                 'sessionattribute', 'modelattribute', 'restcontroller'
@@ -92,11 +167,15 @@ class SecretScanner:
             if value_lower in js_patterns:
                 return True
                 
-            # Check for common JavaScript/JSP variable patterns
+            # Check for common JavaScript/JSP variable patterns and method calls
             if any(pattern in value_lower for pattern in [
                 'document.', 'window.', 'console.', 'jquery.', '$.', 'angular.',
                 'react.', 'vue.', 'this.', 'event.', 'target.', 'currenttarget.',
-                'response.', 'request.', 'session.', 'application.', 'pagecontext.'
+                'response.', 'request.', 'session.', 'application.', 'pagecontext.',
+                # JSP/Java method call patterns
+                '.getparameter(', '.getattribute(', '.setattribute(', '.getproperty(',
+                '.setproperty(', '.getvalue(', '.setvalue(', '.get(', '.put(',
+                '.containskey(', '.haskey(', '.keyup(', '.keydown(', '.keypress('
             ]):
                 return True
         
@@ -313,8 +392,15 @@ class SecretScanner:
                     # Calculate entropy
                     entropy = self.calculate_entropy(value)
                     
-                    # Use lower threshold for password-related variables
-                    threshold = ENTROPY_THRESHOLDS['password'] if 'password' in var_name.lower() else ENTROPY_THRESHOLDS['default']
+                    # Use different thresholds based on variable name patterns
+                    if 'password' in var_name.lower():
+                        threshold = ENTROPY_THRESHOLDS['password']
+                    elif 'key' in var_name.lower():
+                        # Use very high threshold for generic key patterns to filter out programming terms
+                        # like buttonkey, presskey, etc. while still catching real secrets
+                        threshold = ENTROPY_THRESHOLDS['generic_key']
+                    else:
+                        threshold = ENTROPY_THRESHOLDS['default']
                     
                     if entropy >= threshold:
                         secret = {
@@ -534,8 +620,15 @@ class SecretScanner:
                 # Calculate entropy
                 entropy = self.calculate_entropy(value)
                 
-                # Use lower threshold for password-related variables
-                threshold = ENTROPY_THRESHOLDS['password'] if 'password' in var_name.lower() else ENTROPY_THRESHOLDS['default']
+                # Use different thresholds based on variable name patterns
+                if 'password' in var_name.lower():
+                    threshold = ENTROPY_THRESHOLDS['password']
+                elif 'key' in var_name.lower():
+                    # Use very high threshold for generic key patterns to filter out programming terms
+                    # like buttonkey, presskey, etc. while still catching real secrets
+                    threshold = ENTROPY_THRESHOLDS['generic_key']
+                else:
+                    threshold = ENTROPY_THRESHOLDS['default']
                 
                 if entropy >= threshold:
                     secret = {

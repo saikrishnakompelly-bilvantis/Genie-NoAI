@@ -31,6 +31,7 @@ ENTROPY_THRESHOLDS = {
     'api_key': 4.5,       # Higher for API keys
     'token': 4.0,         # Medium for tokens
     'secret': 4.0,        # Medium for generic secrets
+    'generic_key': 4.3,   # Optimal threshold for generic "key" patterns (filters programming terms, catches secrets)
     'default': 4.0        # Default threshold
 }
 
@@ -55,6 +56,11 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     
     # JWT Tokens - No entropy check needed, structure is sufficient
     (r'eyJ[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}', 'JWT Token', {'require_entropy': False}),
+    
+    # Generic Key patterns - Very high entropy requirement to filter out programming terms
+    # This catches things like "key = 'some_actual_secret'" but filters out "key = 'buttonkey'"
+    (r'(?i)\bkey[_\-\.]*\s*[=:]\s*["\']([^"\']{8,})["\']', 'Generic Key Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.3}),
+    (r'(?i)(\w*key)\s*[=:]\s*["\']([^"\']{8,})["\']', 'Generic Key Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.3}),
     
     # Passwords - Lower entropy requirement
     (r'(?i)password[_\-\.]?\s*[=:]\s*[^\s]{8,}', 'Password Assignment', {'min_length': 8, 'require_entropy': True, 'threshold': 4.0}),
