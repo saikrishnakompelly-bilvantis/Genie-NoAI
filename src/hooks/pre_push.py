@@ -777,36 +777,13 @@ def append_justification_to_commit(validation_results):
         # Removed error log
         return False
 
-def generate_and_open_report(secrets_found):
+def generate_and_open_report(diff_secrets, repo_secrets):
     try:
         reports_dir = SCRIPT_DIR / ".push-reports"
         reports_dir.mkdir(exist_ok=True)
         
-        scanner = SecretScanner()
-        
-        # Check scan configuration
-        repo_secrets = []
-        if should_scan_repo():
-            # Replace info log with progress print
-            print("-  Scanning entire repository...")
-            repo_secrets = scanner.scan_repository()
-        else:
-            # Removed info log
-            pass
-        
-        # Check if diff scan is enabled
-        diff_secrets = []
-        if should_scan_diff():
-            # Replace info log with progress print
-            print("-  Scanning changed files...")
-            diff_secrets = secrets_found
-        else:
-            # Removed info log
-            pass
-        
+        # Generate the report, passing diff_secrets directly
         output_path = reports_dir / "scan-report.html"
-        
-        # Generate the report, passing repo_secrets directly
         success = generate_html_report(
             str(output_path),
             diff_secrets=diff_secrets,
@@ -897,35 +874,58 @@ def main():
         # Replace info log with progress print
         print(f"-  Running pre-push hook for {len(pushed_files)} files")
         
-        # Check scan configuration
-        secrets_data = []
+        # Check scan configuration and run all enabled scans BEFORE validation
+        diff_secrets = []
+        repo_secrets = []
+        
+        # Run diff scanning if enabled
         if should_scan_diff():
-            secrets_data = run_secret_scan_on_pushed_files()
+            diff_secrets = run_secret_scan_on_pushed_files()
         else:
-            # Removed info log
-            pass
+            print("-  Diff scanning disabled in configuration")
+        
+        # Run repository scanning if enabled
+        if should_scan_repo():
+            print("-  Scanning entire repository...")
+            scanner = SecretScanner()
+            repo_secrets = scanner.scan_repository()
+        else:
+            print("-  Repository scanning disabled in configuration")
+        
+        # Combine all secrets for validation - ALL secrets must be validated before push
+        all_secrets = diff_secrets + repo_secrets
+        
+        # Remove duplicates based on file_path and line_number
+        seen_secrets = set()
+        unique_secrets = []
+        for secret in all_secrets:
+            key = (secret.get('file_path', ''), secret.get('line_number', 0))
+            if key not in seen_secrets:
+                seen_secrets.add(key)
+                unique_secrets.append(secret)
         
         validation_results = {}
         
-        if secrets_data:
+        # CRITICAL: Validate ALL secrets found (diff + repo) before allowing push
+        if unique_secrets:
+            print(f"-  Found {len(unique_secrets)} total secrets requiring validation")
             validation = ValidationWindow()
-            if not validation.run_validation(secrets_data):
-                # Replace info log with progress print
+            if not validation.run_validation(unique_secrets):
                 print("-  Push aborted by user during validation")
                 sys.exit(1)
             
             validation_results = validation.results
-            save_metadata(validation.results, secrets_data)
+            save_metadata(validation.results, unique_secrets)
             record_push_information(validation_results)
             
             # Append justification to commit message if there are secrets
             append_justification_to_commit(validation_results)
         else:
             save_metadata({}, [])
-            # Replace info log with progress print
-            print("-  No secrets found in pushed files")
+            print("-  No secrets found in scanned files")
         
-        generate_and_open_report(secrets_data)
+        # Generate report with separate diff and repo results for clarity
+        generate_and_open_report(diff_secrets, repo_secrets)
         
         save_current_commit_as_pushed()
             
