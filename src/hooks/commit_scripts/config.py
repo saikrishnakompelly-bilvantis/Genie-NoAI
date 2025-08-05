@@ -127,7 +127,16 @@ EXCLUDED_EXTENSIONS_DEFAULT = {
     'tif', 'tiff', 'ico', 'webp',
     # Add new data file types
     'xlsx', 'xlsb', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml',
-    'parquet', 'avro', 'orc'
+    'parquet', 'avro', 'orc',
+    # Minified and build artifacts that cause false positives
+    'min.js', 'min.css',        # Minified files with very long lines
+    'bundle.js', 'bundle.css',  # Webpack/build bundles  
+    'map',                      # Source map files
+    'lock',                     # Package lock files
+    'd.ts',                     # TypeScript definition files
+    'min.mjs', 'bundle.mjs',    # ES modules minified/bundled
+    'umd.js', 'iife.js',        # UMD and IIFE bundles
+    'worker.js',                # Web worker files (often generated)
 }
 
 # Directories to exclude from scanning - load from YAML if available

@@ -264,9 +264,40 @@ class SecretScanner:
             'preferences', 'defaults', 'constants', 'variables', 'parameters'
         }
         
+        # Common natural language terms that have high entropy but aren't secrets
+        natural_language_terms = {
+            # Month names
+            'january', 'february', 'march', 'april', 'may', 'june',
+            'july', 'august', 'september', 'october', 'november', 'december',
+            'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+            
+            # Day names
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+            'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun',
+            
+            # Common descriptive words that can have high entropy
+            'description', 'information', 'documentation', 'explanation', 'content',
+            'message', 'comment', 'title', 'heading', 'label', 'caption', 'text',
+            'example', 'sample', 'placeholder', 'default', 'standard', 'normal',
+            'regular', 'typical', 'common', 'general', 'basic', 'simple',
+            
+            # Time-related terms
+            'morning', 'afternoon', 'evening', 'night', 'today', 'tomorrow',
+            'yesterday', 'weekend', 'weekday', 'minute', 'hour', 'second',
+            
+            # Status and state terms
+            'success', 'failure', 'error', 'warning', 'notice', 'info',
+            'complete', 'incomplete', 'pending', 'processing', 'finished',
+            'started', 'stopped', 'running', 'idle', 'waiting',
+            
+            # Common file and path terms
+            'filename', 'filepath', 'directory', 'folder', 'document', 'file',
+            'extension', 'format', 'type', 'size', 'length', 'width', 'height'
+        }
+        
         # Check against all common values (case-insensitive)
         value_lower = value.lower()
-        if value_lower in common_values or value_lower in programming_terms:
+        if value_lower in common_values or value_lower in programming_terms or value_lower in natural_language_terms:
             return True
             
         # Skip values that are clearly not secrets based on patterns
@@ -279,6 +310,37 @@ class SecretScanner:
             '${', '#{', '{{',                            # Template syntax
             'function(', 'return ', 'var ', 'let ', 'const ',  # Code keywords
         ]):
+            return True
+        
+        # Skip natural language patterns that aren't secrets
+        # Sentences with spaces and common words
+        if ' ' in value_lower:
+            common_sentence_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+            words = value_lower.split()
+            if len(words) >= 2 and any(word in common_sentence_words for word in words):
+                return True
+        
+        # Skip date and time patterns
+        date_time_patterns = [
+            r'\d{4}-\d{2}-\d{2}',           # YYYY-MM-DD
+            r'\d{2}\/\d{2}\/\d{4}',         # MM/DD/YYYY
+            r'\d{2}-\d{2}-\d{4}',           # MM-DD-YYYY
+            r'\d{2}:\d{2}:\d{2}',           # HH:MM:SS
+            r'\d{2}:\d{2}',                 # HH:MM
+            r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', # ISO datetime
+        ]
+        
+        for pattern in date_time_patterns:
+            if re.search(pattern, value):
+                return True
+        
+        # Skip descriptive phrases (contain common descriptive words)
+        descriptive_indicators = [
+            'description', 'message', 'text', 'content', 'title', 'label',
+            'comment', 'note', 'info', 'details', 'summary', 'caption'
+        ]
+        
+        if any(indicator in value_lower for indicator in descriptive_indicators):
             return True
             
         # Skip values that look like configuration keys or identifiers

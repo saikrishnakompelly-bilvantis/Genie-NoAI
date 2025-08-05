@@ -1,1 +1,0 @@
-SECRET = 'super-secret-value'
