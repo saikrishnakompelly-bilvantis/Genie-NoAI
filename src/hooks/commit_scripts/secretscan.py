@@ -92,9 +92,20 @@ class SecretScanner:
         if any(name_lower.startswith(prefix) for prefix in jsp_prefixes):
             return False
         
+        # Skip authentication status terms that contain "auth" but aren't secrets
+        auth_status_terms = {
+            'unauthorized', 'unauthorised', 'authenticated', 'unauthenticated',
+            'authorized', 'authorised', 'authentication', 'authorization',
+            'authstatus', 'authstate', 'authresult', 'autherror', 'authmessage',
+            'authresponse', 'authrequest', 'authfailed', 'authsuccess'
+        }
+        
+        if name_lower in auth_status_terms:
+            return False
+        
         # Original suspicious terms check
         suspicious_terms = {
-            'token', 'secret', 'password', 'pwd', 'pass', 'auth',
+            'token', 'secret', 'password', 'pwd', 'pass',
             'credential', 'private', 'cert', 'ssh'
         }
         
@@ -109,6 +120,15 @@ class SecretScanner:
                 return True
             else:
                 return False
+        
+        # Handle "auth" terms specifically - only flag as suspicious if combined with secret indicators
+        if 'auth' in name_lower:
+            # Only consider "auth" suspicious if combined with secret-indicating terms
+            auth_secret_indicators = ['key', 'token', 'secret', 'credential', 'pass']
+            if any(indicator in name_lower for indicator in auth_secret_indicators):
+                return True
+            else:
+                return False  # Status terms like "unauthorized" are not suspicious
         
         return any(term in name_lower for term in suspicious_terms)
     
@@ -290,6 +310,19 @@ class SecretScanner:
             'complete', 'incomplete', 'pending', 'processing', 'finished',
             'started', 'stopped', 'running', 'idle', 'waiting',
             
+            # Authentication and authorization status terms (not secrets)
+            'unauthorized', 'unauthorised', 'forbidden', 'denied', 'rejected',
+            'authenticated', 'unauthenticated', 'authorized', 'authorised',
+            'permission', 'permissions', 'privileges', 'access', 'accessible',
+            'inaccessible', 'restricted', 'unrestricted', 'public', 'protected',
+            'allowed', 'disallowed', 'granted', 'revoked', 'expired', 'valid',
+            'invalid', 'verified', 'unverified', 'confirmed', 'unconfirmed',
+            
+            # HTTP status and error terms
+            'notfound', 'badrequest', 'servererror', 'timeout', 'conflict',
+            'redirect', 'moved', 'created', 'accepted', 'nocontent',
+            'modified', 'cached', 'gateway', 'unavailable',
+            
             # Common file and path terms
             'filename', 'filepath', 'directory', 'folder', 'document', 'file',
             'extension', 'format', 'type', 'size', 'length', 'width', 'height'
@@ -337,11 +370,30 @@ class SecretScanner:
         # Skip descriptive phrases (contain common descriptive words)
         descriptive_indicators = [
             'description', 'message', 'text', 'content', 'title', 'label',
-            'comment', 'note', 'info', 'details', 'summary', 'caption'
+            'comment', 'note', 'info', 'details', 'summary', 'caption',
+            # Authentication/authorization status messages
+            'unauthorized', 'unauthorised', 'forbidden', 'denied', 'access',
+            'permission', 'authenticated', 'authorized', 'authorised',
+            'status', 'error', 'warning', 'notice', 'alert', 'notification',
+            # HTTP and API response terms
+            'response', 'request', 'header', 'body', 'payload', 'endpoint'
         ]
         
         if any(indicator in value_lower for indicator in descriptive_indicators):
             return True
+        
+        # Skip common authentication/authorization phrases and error messages
+        auth_message_patterns = [
+            'access denied', 'permission denied', 'unauthorized access',
+            'authentication failed', 'authorization failed', 'login failed',
+            'invalid credentials', 'session expired', 'token expired',
+            'forbidden access', 'access forbidden', 'not authorized',
+            'authentication required', 'login required', 'credentials required'
+        ]
+        
+        for pattern in auth_message_patterns:
+            if pattern in value_lower:
+                return True
             
         # Skip values that look like configuration keys or identifiers
         if value_lower.endswith(('key', 'id', 'name', 'type', 'mode', 'flag', 'option')):
