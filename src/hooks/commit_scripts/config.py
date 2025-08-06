@@ -128,15 +128,8 @@ EXCLUDED_EXTENSIONS_DEFAULT = {
     # Add new data file types
     'xlsx', 'xlsb', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml',
     'parquet', 'avro', 'orc',
-    # Minified and build artifacts that cause false positives
-    'min.js', 'min.css',        # Minified files with very long lines
-    'bundle.js', 'bundle.css',  # Webpack/build bundles  
-    'map',                      # Source map files
-    'lock',                     # Package lock files
-    'd.ts',                     # TypeScript definition files
-    'min.mjs', 'bundle.mjs',    # ES modules minified/bundled
-    'umd.js', 'iife.js',        # UMD and IIFE bundles
-    'worker.js',                # Web worker files (often generated)
+    # Build artifacts (single extensions only - compound extensions handled separately)
+    'lock'                      # Package lock files
 }
 
 # Directories to exclude from scanning - load from YAML if available
@@ -195,6 +188,26 @@ def should_exclude_file(file_path: str) -> bool:
     # Skip files with excluded extensions
     _, ext = os.path.splitext(file_path)
     if ext and ext.lower().lstrip('.') in EXCLUDED_EXTENSIONS:
+        return True
+    
+    # Special handling for minified and build files with compound extensions
+    # These files have extensions like .min.js, .bundle.css, etc.
+    file_name = os.path.basename(file_path).lower()
+    minified_patterns = [
+        '.min.js', '.min.css', '.min.mjs',           # Minified files
+        '.bundle.js', '.bundle.css', '.bundle.mjs',  # Bundle files
+        '.umd.js', '.iife.js', '.esm.js',           # Module format bundles
+        '.production.js', '.dev.js',                # Environment-specific builds
+        '.vendor.js', '.vendor.css',                # Vendor bundles
+        '.chunk.js', '.chunk.css'                   # Webpack chunks
+    ]
+    
+    for pattern in minified_patterns:
+        if file_name.endswith(pattern):
+            return True
+    
+    # Also check for source map files and other build artifacts
+    if file_name.endswith(('.map', '.d.ts')):
         return True
     
     # Skip files in excluded directories
