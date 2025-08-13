@@ -222,6 +222,33 @@ class SecretScanner:
             if value_lower in html_patterns:
                 return True
         
+        # Terraform specific false positives
+        elif file_ext == 'tf':
+            # Check if the value contains Terraform-specific keywords that are not secrets
+            terraform_keywords = ['keyrings', 'networks', 'subnetworks', 'projects/']
+            if any(keyword in value_lower for keyword in terraform_keywords):
+                return True
+            
+            # Additional Terraform-specific patterns that are not secrets
+            terraform_patterns = {
+                # Common Terraform resource types
+                'google_compute_network', 'google_compute_subnetwork', 'google_kms_keyring',
+                'google_project', 'google_project_service', 'google_project_iam',
+                
+                # Terraform data sources
+                'data.google_project', 'data.google_compute_network', 'data.google_kms_keyring',
+                
+                # Common Terraform variable patterns
+                'var.project_id', 'var.network_name', 'var.subnetwork_name', 'var.keyring_name',
+                'local.project_id', 'local.network_name', 'local.subnetwork_name',
+                
+                # Terraform function calls
+                'terraform.workspace', 'terraform.workspace_name', 'terraform.workspace_id'
+            }
+            
+            if value_lower in terraform_patterns:
+                return True
+        
         return False
     
     def should_skip_value(self, value: str, file_path: str = '') -> bool:
@@ -407,6 +434,30 @@ class SecretScanner:
                 
         return False
     
+    def should_skip_terraform_line(self, line: str, file_path: str) -> bool:
+        """Check if a line should be skipped for Terraform files based on specific keywords."""
+        if not file_path.lower().endswith('.tf'):
+            return False
+        
+        line_lower = line.lower()
+        
+        # Skip lines containing Terraform-specific keywords that are not secrets
+        terraform_keywords = ['keyrings', 'networks', 'subnetworks', 'projects/']
+        if any(keyword in line_lower for keyword in terraform_keywords):
+            return True
+        
+        # Skip lines with common Terraform resource definitions that are not secrets
+        terraform_resource_patterns = [
+            'google_compute_network', 'google_compute_subnetwork', 'google_kms_keyring',
+            'google_project', 'google_project_service', 'google_project_iam',
+            'data.google_project', 'data.google_compute_network', 'data.google_kms_keyring'
+        ]
+        
+        if any(pattern in line_lower for pattern in terraform_resource_patterns):
+            return True
+        
+        return False
+    
     def scan_content(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for potential secrets."""
         # Initialize a local list to collect secrets found in this content
@@ -418,6 +469,11 @@ class SecretScanner:
         for line_num, line in enumerate(lines, 1):
             # Only skip empty lines, but process all comments
             if not line.strip():
+                continue
+            
+            # Check if this line should be skipped for Terraform files
+            if self.should_skip_terraform_line(line, file_path):
+                self.logger.debug(f"Skipping Terraform line {line_num} in {file_path}: contains excluded keywords")
                 continue
             
             # Check if we've already found a secret at this file:line
@@ -657,6 +713,11 @@ class SecretScanner:
         # Check if the file should be excluded
         if should_exclude_file(file_path):
             self.logger.debug(f"Skipping excluded file line: {file_path}:{line_number}")
+            return
+        
+        # Check if this line should be skipped for Terraform files
+        if self.should_skip_terraform_line(line, file_path):
+            self.logger.debug(f"Skipping Terraform line {line_number} in {file_path}: contains excluded keywords")
             return
         
         found_secret = False
@@ -1160,7 +1221,7 @@ def generate_table_rows(secrets):
 def main() -> None:
     """Main entry point for the secret scanner."""
     # Set up logging
-    setup_logging()
+    setup_logging("secret_scan.log")
     
     args = sys.argv[1:]
     scanner = SecretScanner()

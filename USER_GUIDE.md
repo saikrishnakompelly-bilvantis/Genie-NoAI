@@ -343,7 +343,7 @@ ls -la ~/.genie/
 
 # Fix permissions if needed
 chmod 755 ~/.genie/hooks/
-chmod 644 ~/.genie/config
+chmod 644 ~/.genie/secret_scan/config
 ```
 
 
