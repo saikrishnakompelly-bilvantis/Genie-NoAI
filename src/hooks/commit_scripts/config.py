@@ -126,7 +126,7 @@ EXCLUDED_EXTENSIONS_DEFAULT = {
     'ppt', 'pptx', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'svg',
     'tif', 'tiff', 'ico', 'webp',
     # Add new data file types
-    'xlsx', 'xlsb', 'csv', 'tsv', 'json', 'xml', 'yaml', 'yml',
+    'xlsx', 'xlsb', 'csv', 'tsv', 'json', 'xml',
     'parquet', 'avro', 'orc',
     # Build artifacts (single extensions only - compound extensions handled separately)
     'lock'                      # Package lock files

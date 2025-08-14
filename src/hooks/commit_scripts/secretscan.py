@@ -249,6 +249,85 @@ class SecretScanner:
             if value_lower in terraform_patterns:
                 return True
         
+        # YAML specific false positives
+        elif file_ext in ('yaml', 'yml'):
+            # Common YAML patterns that are not secrets
+            yaml_patterns = {
+                # Kubernetes and common YAML resource types
+                'apiVersion', 'kind', 'metadata', 'spec', 'data', 'config',
+                'environment', 'env', 'namespace', 'labels', 'annotations',
+                'selector', 'matchLabels', 'template', 'containers', 'ports',
+                'volumes', 'configMap', 'secret', 'service', 'deployment',
+                'pod', 'node', 'cluster', 'context', 'current-context',
+                
+                # Common YAML values
+                'v1', 'v1beta1', 'apps/v1', 'batch/v1', 'networking.k8s.io/v1',
+                'ClusterIP', 'NodePort', 'LoadBalancer', 'ClusterIP',
+                'Always', 'IfNotPresent', 'Never', 'OnFailure', 'OnSuccess',
+                'ReadWriteOnce', 'ReadOnlyMany', 'ReadWriteMany',
+                
+                # YAML configuration values
+                'true', 'false', 'null', '~', 'yes', 'no', 'on', 'off',
+                'default', 'custom', 'standard', 'basic', 'advanced'
+            }
+            
+            if value_lower in yaml_patterns:
+                return True
+            
+            # Check for YAML-specific patterns that are not secrets
+            if any(pattern in value_lower for pattern in [
+                'apiVersion:', 'kind:', 'metadata:', 'spec:', 'data:', 'config:',
+                'environment:', 'env:', 'namespace:', 'labels:', 'annotations:',
+                'selector:', 'matchLabels:', 'template:', 'containers:', 'ports:',
+                'volumes:', 'configMap:', 'secret:', 'service:', 'deployment:',
+                'pod:', 'node:', 'cluster:', 'context:', 'current-context:'
+            ]):
+                return True
+        
+        # Shell script specific false positives
+        elif file_ext in ('sh', 'bash', 'zsh', 'fish', 'ksh'):
+            # Common shell patterns that are not secrets
+            shell_patterns = {
+                # Shell builtins and commands
+                '#!/bin/', '#!/usr/bin/', 'set -', 'export', 'unset',
+                'source', 'alias', 'function', 'if', 'then', 'else',
+                'elif', 'fi', 'case', 'esac', 'for', 'do', 'done',
+                'while', 'until', 'select', 'break', 'continue',
+                'return', 'exit', 'echo', 'printf', 'read', 'test',
+                'eval', 'exec', 'shift', 'getopts', 'trap',
+                
+                # Common shell variables
+                'PATH', 'HOME', 'USER', 'SHELL', 'TERM', 'PWD',
+                'LANG', 'LC_ALL', 'TZ', 'HOSTNAME', 'HOSTTYPE',
+                'OSTYPE', 'MACHTYPE', 'EDITOR', 'VISUAL', 'PAGER',
+                'MANPATH', 'INFOPATH', 'LD_LIBRARY_PATH', 'PKG_CONFIG_PATH',
+                'PYTHONPATH', 'JAVA_HOME', 'ANDROID_HOME', 'NODE_PATH',
+                'GOPATH', 'CARGO_HOME', 'RUSTUP_HOME', 'NVM_DIR',
+                'RVM_PATH', 'RBENV_ROOT', 'PYENV_ROOT', 'NODENV_ROOT',
+                
+                # Shell file operations
+                'cd', 'pwd', 'ls', 'cp', 'mv', 'rm', 'mkdir', 'rmdir',
+                'ln', 'chmod', 'chown', 'chgrp', 'touch', 'cat', 'head',
+                'tail', 'grep', 'sed', 'awk', 'sort', 'uniq', 'wc',
+                'cut', 'paste', 'join', 'split', 'tr', 'expand', 'unexpand'
+            }
+            
+            if value_lower in shell_patterns:
+                return True
+            
+            # Check for shell-specific patterns that are not secrets
+            if any(pattern in value_lower for pattern in [
+                '#!/bin/', '#!/usr/bin/', 'set -', 'export ', 'unset ',
+                'source ', '. ', 'alias ', 'function ', 'if ', 'then ',
+                'else ', 'elif ', 'fi', 'case ', 'esac', 'for ', 'do ',
+                'done', 'while ', 'until ', 'select ', 'break', 'continue',
+                'return', 'exit', 'echo ', 'printf ', 'read ', 'test ',
+                'eval ', 'exec ', 'shift', 'getopts', 'trap ',
+                'umask', 'ulimit', 'cd ', 'pwd', 'ls ', 'cp ', 'mv ',
+                'rm ', 'mkdir', 'rmdir', 'ln ', 'chmod', 'chown', 'chgrp'
+            ]):
+                return True
+        
         return False
     
     def should_skip_value(self, value: str, file_path: str = '') -> bool:
@@ -308,7 +387,32 @@ class SecretScanner:
             # Generic application terms
             'application', 'version', 'production', 'development', 'staging',
             'environment', 'profile', 'configuration', 'settings', 'options',
-            'preferences', 'defaults', 'constants', 'variables', 'parameters'
+            'preferences', 'defaults', 'constants', 'variables', 'parameters',
+            
+            # YAML-specific terms
+            'apiVersion', 'kind', 'metadata', 'spec', 'data', 'config',
+            'environment', 'env', 'namespace', 'labels', 'annotations',
+            'selector', 'matchLabels', 'template', 'containers', 'ports',
+            'volumes', 'configMap', 'secret', 'service', 'deployment',
+            'pod', 'node', 'cluster', 'context', 'current-context',
+            'v1', 'v1beta1', 'apps/v1', 'batch/v1', 'networking.k8s.io/v1',
+            'ClusterIP', 'NodePort', 'LoadBalancer', 'Always', 'IfNotPresent',
+            'Never', 'OnFailure', 'OnSuccess', 'ReadWriteOnce', 'ReadOnlyMany',
+            'ReadWriteMany', 'true', 'false', 'null', '~', 'yes', 'no', 'on', 'off',
+            
+            # Shell-specific terms
+            '#!/bin/', '#!/usr/bin/', 'set -', 'export', 'unset', 'source',
+            'alias', 'function', 'if', 'then', 'else', 'elif', 'fi', 'case',
+            'esac', 'for', 'do', 'done', 'while', 'until', 'select',
+            'break', 'continue', 'return', 'exit', 'echo', 'printf', 'read',
+            'test', 'eval', 'exec', 'shift', 'getopts', 'trap', 'umask',
+            'ulimit', 'cd', 'pwd', 'ls', 'cp', 'mv', 'rm', 'mkdir', 'rmdir',
+            'ln', 'chmod', 'chown', 'chgrp', 'touch', 'cat', 'head', 'tail',
+            'grep', 'sed', 'awk', 'sort', 'uniq', 'wc', 'cut', 'paste',
+            'join', 'split', 'tr', 'expand', 'unexpand', 'nl', 'fold', 'fmt',
+            'pr', 'column', 'col', 'tac', 'rev', 'shuf', 'base64', 'hexdump',
+            'od', 'xxd', 'sum', 'cksum', 'md5sum', 'sha1sum', 'sha256sum',
+            'sha512sum', 'b2sum', 'sha224sum', 'sha384sum', 'sha512t256sum'
         }
         
         # Common natural language terms that have high entropy but aren't secrets
@@ -350,9 +454,32 @@ class SecretScanner:
             'redirect', 'moved', 'created', 'accepted', 'nocontent',
             'modified', 'cached', 'gateway', 'unavailable',
             
-            # Common file and path terms
-            'filename', 'filepath', 'directory', 'folder', 'document', 'file',
-            'extension', 'format', 'type', 'size', 'length', 'width', 'height'
+        # Common file and path terms
+        'filename', 'filepath', 'directory', 'folder', 'document', 'file',
+        'extension', 'format', 'type', 'size', 'length', 'width', 'height',
+        
+        # Common shell environment variables
+        'PATH', 'HOME', 'USER', 'SHELL', 'TERM', 'PWD', 'LANG', 'LC_ALL',
+        'TZ', 'HOSTNAME', 'HOSTTYPE', 'OSTYPE', 'MACHTYPE', 'EDITOR',
+        'VISUAL', 'PAGER', 'MANPATH', 'INFOPATH', 'LD_LIBRARY_PATH',
+        'PKG_CONFIG_PATH', 'PYTHONPATH', 'JAVA_HOME', 'ANDROID_HOME',
+        'NODE_PATH', 'GOPATH', 'CARGO_HOME', 'RUSTUP_HOME', 'NVM_DIR',
+        'RVM_PATH', 'RBENV_ROOT', 'PYENV_ROOT', 'NODENV_ROOT',
+        
+        # Common YAML values
+        'apiVersion', 'kind', 'metadata', 'spec', 'data', 'config',
+        'environment', 'env', 'namespace', 'labels', 'annotations',
+        'selector', 'matchLabels', 'template', 'containers', 'ports',
+        'volumes', 'configMap', 'secret', 'service', 'deployment',
+        'pod', 'node', 'cluster', 'context', 'current-context',
+        
+        # Common URL and hostname terms
+        'localhost', '127.0.0.1', '0.0.0.0', '::1', 'api', 'www',
+        'mail', 'smtp', 'pop', 'imap', 'ftp', 'ssh', 'dns', 'ns1',
+        'ns2', 'mx', 'web', 'app', 'db', 'redis', 'elasticsearch',
+        'kafka', 'rabbitmq', 'postgres', 'mysql', 'mongodb', 'cassandra',
+        'influxdb', 'prometheus', 'grafana', 'dev', 'test', 'staging',
+        'prod', 'uat', 'qa', 'preview', 'demo', 'sandbox'
         }
         
         # Check against all common values (case-insensitive)
@@ -360,15 +487,30 @@ class SecretScanner:
         if value_lower in common_values or value_lower in programming_terms or value_lower in natural_language_terms:
             return True
             
+        # Check if the value is a URL or hostname (common false positives)
+        if self.is_url_or_hostname(value):
+            return True
+            
         # Skip values that are clearly not secrets based on patterns
-        # URLs, file paths, common formats
+        # File paths, common formats
         if any(pattern in value_lower for pattern in [
-            'http://', 'https://', 'ftp://', 'file://',  # URLs
-            '.com', '.org', '.net', '.edu', '.gov',      # Domain endings
             '.js', '.css', '.html', '.jsp', '.php',      # File extensions
             '.png', '.jpg', '.gif', '.svg',              # Image extensions
             '${', '#{', '{{',                            # Template syntax
             'function(', 'return ', 'var ', 'let ', 'const ',  # Code keywords
+            # YAML-specific patterns
+            'apiVersion:', 'kind:', 'metadata:', 'spec:', 'data:', 'config:',
+            'environment:', 'env:', 'namespace:', 'labels:', 'annotations:',
+            'selector:', 'matchLabels:', 'template:', 'containers:', 'ports:',
+            'volumes:', 'configMap:', 'secret:', 'service:', 'deployment:',
+            'pod:', 'node:', 'cluster:', 'context:', 'current-context:',
+            # Shell-specific patterns
+            '#!/bin/', '#!/usr/bin/', 'set -', 'export ', 'unset ',
+            'source ', '. ', 'alias ', 'function ', 'if ', 'then ',
+            'else ', 'elif ', 'fi', 'case ', 'esac', 'for ', 'do ',
+            'done', 'while ', 'until ', 'select ', 'break', 'continue',
+            'return', 'exit', 'echo ', 'printf ', 'read ', 'test ',
+            'eval ', 'exec ', 'shift', 'getopts', 'trap '
         ]):
             return True
         
@@ -431,6 +573,32 @@ class SecretScanner:
                 'alt', 'meta', 'primary', 'foreign', 'unique', 'composite'
             ]):
                 return True
+        
+        # Skip YAML-specific configuration values
+        if file_path and file_path.lower().endswith(('.yaml', '.yml')):
+            yaml_config_values = {
+                'v1', 'v1beta1', 'apps/v1', 'batch/v1', 'networking.k8s.io/v1',
+                'ClusterIP', 'NodePort', 'LoadBalancer', 'Always', 'IfNotPresent',
+                'Never', 'OnFailure', 'OnSuccess', 'ReadWriteOnce', 'ReadOnlyMany',
+                'ReadWriteMany', 'true', 'false', 'null', '~', 'yes', 'no', 'on', 'off',
+                'default', 'custom', 'standard', 'basic', 'advanced', 'development',
+                'staging', 'production', 'test', 'debug', 'release', 'stable'
+            }
+            if value_lower in yaml_config_values:
+                return True
+        
+        # Skip shell-specific configuration values
+        if file_path and file_path.lower().endswith(('.sh', '.bash', '.zsh', '.fish', '.ksh')):
+            shell_config_values = {
+                '#!/bin/bash', '#!/bin/sh', '#!/usr/bin/bash', '#!/usr/bin/sh',
+                'set -e', 'set -u', 'set -o', 'set +e', 'set +u', 'set +o',
+                'export PATH', 'export HOME', 'export USER', 'export SHELL',
+                'export TERM', 'export PWD', 'export LANG', 'export LC_ALL',
+                'export TZ', 'export HOSTNAME', 'export HOSTTYPE', 'export OSTYPE',
+                'export MACHTYPE', 'export EDITOR', 'export VISUAL', 'export PAGER'
+            }
+            if value_lower in shell_config_values:
+                return True
                 
         return False
     
@@ -458,6 +626,289 @@ class SecretScanner:
         
         return False
     
+    def should_skip_yaml_line(self, line: str, file_path: str) -> bool:
+        """Check if a line should be skipped for YAML files based on specific keywords."""
+        if not file_path.lower().endswith(('.yaml', '.yml')):
+            return False
+        
+        line_lower = line.lower()
+        
+        # Skip lines containing YAML-specific keywords that are not secrets
+        # But be more specific to avoid skipping legitimate secret assignments
+        yaml_keywords = [
+            'api_version', 'kind', 'metadata', 'spec', 'namespace', 'labels', 'annotations',
+            'selector', 'match_labels', 'template', 'containers', 'ports',
+            'volumes', 'configmaps', 'secrets', 'services', 'deployments',
+            'pods', 'nodes', 'clusters', 'contexts', 'current-context'
+        ]
+        
+        # Check if the line contains these keywords in a way that suggests it's not a secret
+        # Skip only if the keyword appears as a key (followed by colon) or in specific contexts
+        for keyword in yaml_keywords:
+            if keyword in line_lower:
+                # Skip if it's a YAML key (followed by colon)
+                if f'{keyword}:' in line_lower:
+                    return True
+                # Skip if it's a Kubernetes resource type
+                if keyword in ['kind', 'api_version', 'metadata', 'spec']:
+                    return True
+                # Skip if it's a template or container definition
+                if keyword in ['template', 'containers', 'ports', 'volumes']:
+                    return True
+                # Skip if it's a selector or label definition
+                if keyword in ['selector', 'labels', 'annotations']:
+                    return True
+                # Skip if it's a service or deployment definition
+                if keyword in ['services', 'deployments', 'pods', 'nodes', 'clusters']:
+                    return True
+        
+        # Skip lines with common YAML resource definitions that are not secrets
+        yaml_resource_patterns = [
+            'apiVersion:', 'kind:', 'metadata:', 'spec:', 'data:', 'config:',
+            'environment:', 'env:', 'namespace:', 'labels:', 'annotations:',
+            'selector:', 'matchLabels:', 'template:', 'containers:', 'ports:',
+            'volumes:', 'configMap:', 'secret:', 'service:', 'deployment:',
+            'pod:', 'node:', 'cluster:', 'context:', 'current-context:'
+        ]
+        
+        if any(pattern in line_lower for pattern in yaml_resource_patterns):
+            return True
+        
+        # Skip lines with common YAML resource definitions that are not secrets
+        yaml_resource_patterns = [
+            'apiVersion:', 'kind:', 'metadata:', 'spec:', 'data:', 'config:',
+            'environment:', 'env:', 'namespace:', 'labels:', 'annotations:',
+            'selector:', 'matchLabels:', 'template:', 'containers:', 'ports:',
+            'volumes:', 'configMap:', 'secret:', 'service:', 'deployment:',
+            'pod:', 'node:', 'cluster:', 'context:', 'current-context:'
+        ]
+        
+        if any(pattern in line_lower for pattern in yaml_resource_patterns):
+            return True
+        
+        # Skip lines with YAML comment indicators
+        if line.strip().startswith('#'):
+            return True
+        
+        return False
+    
+    def should_skip_shell_line(self, line: str, file_path: str) -> bool:
+        """Check if a line should be skipped for shell script files based on specific keywords."""
+        if not file_path.lower().endswith(('.sh', '.bash', '.zsh', '.fish', '.ksh')):
+            return False
+        
+        line_lower = line.lstrip().lower()
+        
+        # Skip lines containing shell-specific keywords that are not secrets
+        shell_keywords = [
+            '#!/bin/', '#!/usr/bin/', 'set -', 'export ', 'unset ',
+            'source ', '. ', 'alias ', 'function ', 'if ', 'then ',
+            'else ', 'elif ', 'fi', 'case ', 'esac', 'for ', 'do ',
+            'done', 'while ', 'until ', 'select ', 'break', 'continue',
+            'return', 'exit', 'echo ', 'printf ', 'read ', 'test ',
+            'eval ', 'exec ', 'exec', 'shift', 'getopts', 'trap ',
+            'umask', 'ulimit', 'cd ', 'pwd', 'ls ', 'cp ', 'mv ',
+            'rm ', 'mkdir', 'rmdir', 'ln ', 'chmod', 'chown', 'chgrp',
+            'touch', 'cat ', 'head', 'tail', 'grep ', 'sed ', 'awk ',
+            'sort', 'uniq', 'wc ', 'cut ', 'paste', 'join', 'split',
+            'tr ', 'expand', 'unexpand', 'nl', 'fold', 'fmt', 'pr ',
+            'column', 'col', 'tac', 'rev', 'shuf', 'base64', 'hexdump',
+            'od', 'xxd', 'sum', 'cksum', 'md5sum', 'sha1sum', 'sha256sum',
+            'sha512sum', 'b2sum', 'sha224sum', 'sha384sum', 'sha512t256sum'
+        ]
+        
+        if any(keyword in line_lower for keyword in shell_keywords):
+            return True
+        
+        # Skip lines with shell comment indicators
+        if line.strip().startswith('#'):
+            return True
+        
+        # Skip lines with common shell variable assignments that are not secrets
+        shell_var_patterns = [
+            'PATH=', 'HOME=', 'USER=', 'SHELL=', 'TERM=', 'PWD=',
+            'LANG=', 'LC_ALL=', 'TZ=', 'HOSTNAME=', 'HOSTTYPE=',
+            'OSTYPE=', 'MACHTYPE=', 'EDITOR=', 'VISUAL=', 'PAGER=',
+            'MANPATH=', 'INFOPATH=', 'LD_LIBRARY_PATH=', 'PKG_CONFIG_PATH=',
+            'PYTHONPATH=', 'JAVA_HOME=', 'ANDROID_HOME=', 'NODE_PATH=',
+            'GOPATH=', 'CARGO_HOME=', 'RUSTUP_HOME=', 'NVM_DIR=',
+            'RVM_PATH=', 'RBENV_ROOT=', 'PYENV_ROOT=', 'NODENV_ROOT='
+        ]
+        
+        if any(pattern in line_lower for pattern in shell_var_patterns):
+            return True
+        
+        # Skip lines with shell function definitions
+        if re.match(r'^\s*\w+\s*\(\s*\)\s*\{?\s*$', line):
+            return True
+        
+        # Skip lines with shell conditional statements
+        if re.match(r'^\s*(if|elif|while|until|for)\s+', line):
+            return True
+        
+        return False
+    
+    def is_url_or_hostname(self, value: str) -> bool:
+        """Check if a value is a URL or hostname that should be skipped."""
+        value_lower = value.lower()
+        
+        # Common URL schemes
+        url_schemes = ['http://', 'https://', 'ftp://', 'file://', 'sftp://', 'ssh://', 'ws://', 'wss://']
+        if any(value_lower.startswith(scheme) for scheme in url_schemes):
+            return True
+        
+        # Common domain extensions
+        domain_extensions = [
+            '.com', '.org', '.net', '.edu', '.gov', '.mil', '.int',
+            '.co', '.io', '.ai', '.app', '.dev', '.tech', '.cloud',
+            '.info', '.biz', '.name', '.pro', '.aero', '.coop',
+            '.museum', '.travel', '.jobs', '.mobi', '.tel', '.xxx',
+            '.ac', '.ad', '.ae', '.af', '.ag', '.al', '.am', '.an',
+            '.ao', '.aq', '.ar', '.as', '.at', '.au', '.aw', '.az',
+            '.ba', '.bb', '.bd', '.be', '.bf', '.bg', '.bh', '.bi',
+            '.bj', '.bm', '.bn', '.bo', '.br', '.bs', '.bt', '.bw',
+            '.by', '.bz', '.ca', '.cc', '.cd', '.cf', '.cg', '.ch',
+            '.ci', '.ck', '.cl', '.cm', '.cn', '.cr', '.cu', '.cv',
+            '.cw', '.cx', '.cy', '.cz', '.de', '.dj', '.dk', '.dm',
+            '.do', '.dz', '.ec', '.ee', '.eg', '.er', '.es', '.et',
+            '.eu', '.fi', '.fj', '.fk', '.fm', '.fo', '.fr', '.ga',
+            '.gd', '.ge', '.gf', '.gg', '.gh', '.gi', '.gl', '.gm',
+            '.gn', '.gp', '.gq', '.gr', '.gs', '.gt', '.gu', '.gw',
+            '.gy', '.hk', '.hm', '.hn', '.hr', '.ht', '.hu', '.id',
+            '.il', '.im', '.in', '.iq', '.ir', '.is', '.it', '.je',
+            '.jm', '.jo', '.jp', '.ke', '.kg', '.kh', '.ki', '.km',
+            '.kn', '.kp', '.kr', '.kw', '.ky', '.kz', '.la', '.lb',
+            '.lc', '.li', '.lk', '.lr', '.ls', '.lt', '.lu', '.lv',
+            '.ly', '.ma', '.mc', '.md', '.me', '.mg', '.mh', '.mk',
+            '.ml', '.mm', '.mn', '.mo', '.mp', '.mq', '.mr', '.ms',
+            '.mt', '.mu', '.mv', '.mw', '.mx', '.my', '.mz', '.na',
+            '.nc', '.ne', '.nf', '.ng', '.ni', '.nl', '.no', '.np',
+            '.nr', '.nu', '.nz', '.om', '.pa', '.pe', '.pf', '.pg',
+            '.ph', '.pk', '.pl', '.pm', '.pn', '.pr', '.ps', '.pt',
+            '.pw', '.py', '.qa', '.re', '.ro', '.rs', '.ru', '.rw',
+            '.sa', '.sb', '.sc', '.sd', '.se', '.sg', '.sh', '.si',
+            '.sk', '.sl', '.sm', '.sn', '.so', '.sr', '.st', '.su',
+            '.sv', '.sy', '.sz', '.tc', '.td', '.tf', '.tg', '.th',
+            '.tj', '.tk', '.tl', '.tm', '.tn', '.to', '.tr', '.tt',
+            '.tv', '.tw', '.tz', '.ua', '.ug', '.uk', '.us', '.uy',
+            '.uz', '.va', '.vc', '.ve', '.vg', '.vi', '.vn', '.vu',
+            '.wf', '.ws', '.ye', '.yt', '.za', '.zm', '.zw'
+        ]
+        
+        # Check if value contains domain extensions
+        # But exclude known secret patterns that might contain domain-like strings
+        if any(ext in value_lower for ext in domain_extensions):
+            # Skip if this looks like a known secret pattern
+            if self.is_likely_secret_pattern(value):
+                return False
+            return True
+        
+        # Common hostname patterns
+        hostname_patterns = [
+            # Local development
+            'localhost', '127.0.0.1', '0.0.0.0', '::1',
+            'dev.local', 'test.local', 'staging.local', 'prod.local',
+            'local.dev', 'local.test', 'local.staging', 'local.prod',
+            
+            # Common service names
+            'api', 'www', 'mail', 'smtp', 'pop', 'imap', 'ftp', 'ssh',
+            'dns', 'ns1', 'ns2', 'mx', 'web', 'app', 'db', 'redis',
+            'elasticsearch', 'kafka', 'rabbitmq', 'postgres', 'mysql',
+            'mongodb', 'cassandra', 'influxdb', 'prometheus', 'grafana',
+            
+            # Cloud service domains
+            'amazonaws.com', 'cloudfront.net', 's3.amazonaws.com',
+            'rds.amazonaws.com', 'elasticbeanstalk.com', 'ec2.amazonaws.com',
+            'googleapis.com', 'googleusercontent.com', 'cloud.google.com',
+            'azure.com', 'microsoft.com', 'windows.net', 'cloudapp.net',
+            'herokuapp.com', 'netlify.app', 'vercel.app', 'github.io',
+            'gitlab.io', 'bitbucket.io', 'surge.sh', 'now.sh',
+            
+            # Common subdomains
+            'api.', 'www.', 'mail.', 'smtp.', 'pop.', 'imap.', 'ftp.',
+            'ssh.', 'dns.', 'ns1.', 'ns2.', 'mx.', 'web.', 'app.',
+            'db.', 'redis.', 'elasticsearch.', 'kafka.', 'rabbitmq.',
+            'postgres.', 'mysql.', 'mongodb.', 'cassandra.', 'influxdb.',
+            'prometheus.', 'grafana.', 'dev.', 'test.', 'staging.',
+            'prod.', 'uat.', 'qa.', 'preview.', 'demo.', 'sandbox.'
+        ]
+        
+        # Check if value contains hostname patterns
+        # But exclude known secret patterns that might contain hostname-like strings
+        if any(pattern in value_lower for pattern in hostname_patterns):
+            # Skip if this looks like a known secret pattern
+            if self.is_likely_secret_pattern(value):
+                return False
+            return True
+        
+        # IP address patterns (IPv4 and IPv6)
+        ip_patterns = [
+            r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$',  # IPv4
+            r'^[0-9a-fA-F:]+$',  # IPv6 (simplified)
+            r'^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$',  # Private IPv4 ranges
+            r'^172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}$',
+            r'^192\.168\.\d{1,3}\.\d{1,3}$'
+        ]
+        
+        for pattern in ip_patterns:
+            if re.match(pattern, value):
+                return True
+        
+        # URL-like patterns without schemes
+        url_like_patterns = [
+            r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$',  # Domain-like
+            r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*:\d+$',  # Domain with port
+            r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*/[a-zA-Z0-9\-_/]*$'  # Domain with path
+        ]
+        
+        for pattern in url_like_patterns:
+            if re.match(pattern, value):
+                # Skip if this looks like a known secret pattern
+                if self.is_likely_secret_pattern(value):
+                    return False
+                return True
+        
+        return False
+    
+    def is_likely_secret_pattern(self, value: str) -> bool:
+        """Check if a value looks like a known secret pattern despite containing domain-like strings."""
+        value_lower = value.lower()
+        
+        # AWS Access Key ID pattern (starts with AKIA, AIAK, AGPA, AIDA, ARPA, or AROA)
+        if re.match(r'^AKIA[0-9A-Z]{16}$', value):
+            return True
+        
+        # AWS Access Key ID pattern (starts with AKIA, AIAK, AGPA, AIDA, ARPA, or AROA) - case insensitive
+        if re.match(r'^AKIA[0-9A-Z]{16}$', value, re.IGNORECASE):
+            return True
+        
+        # AWS Secret Access Key pattern (40 characters, base64-like)
+        if re.match(r'^[A-Za-z0-9/+=]{40}$', value):
+            return True
+        
+        # GitHub Personal Access Token patterns
+        if re.match(r'^ghp_[0-9a-zA-Z]{36}$', value):
+            return True
+        if re.match(r'^github_pat_[0-9a-zA-Z]{82}$', value):
+            return True
+        
+        # OpenAI API Key pattern
+        if re.match(r'^sk-[0-9a-zA-Z]{48}$', value):
+            return True
+        
+        # JWT Token pattern (three base64 sections separated by dots)
+        if re.match(r'^eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+$', value):
+            return True
+        
+        # Generic API key patterns (high entropy, specific length)
+        if re.match(r'^[A-Za-z0-9_-]{20,}$', value) and len(value) >= 20:
+            # Check if it has high entropy (likely a secret)
+            entropy = self.calculate_entropy(value)
+            if entropy > 4.0:  # High entropy threshold
+                return True
+        
+        return False
+    
     def scan_content(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Scan content for potential secrets."""
         # Initialize a local list to collect secrets found in this content
@@ -471,9 +922,17 @@ class SecretScanner:
             if not line.strip():
                 continue
             
-            # Check if this line should be skipped for Terraform files
+            # Check if this line should be skipped for specific file types
             if self.should_skip_terraform_line(line, file_path):
                 self.logger.debug(f"Skipping Terraform line {line_num} in {file_path}: contains excluded keywords")
+                continue
+            
+            if self.should_skip_yaml_line(line, file_path):
+                self.logger.debug(f"Skipping YAML line {line_num} in {file_path}: contains excluded keywords")
+                continue
+            
+            if self.should_skip_shell_line(line, file_path):
+                self.logger.debug(f"Skipping shell line {line_num} in {file_path}: contains excluded keywords")
                 continue
             
             # Check if we've already found a secret at this file:line
@@ -715,9 +1174,17 @@ class SecretScanner:
             self.logger.debug(f"Skipping excluded file line: {file_path}:{line_number}")
             return
         
-        # Check if this line should be skipped for Terraform files
+        # Check if this line should be skipped for specific file types
         if self.should_skip_terraform_line(line, file_path):
             self.logger.debug(f"Skipping Terraform line {line_number} in {file_path}: contains excluded keywords")
+            return
+        
+        if self.should_skip_yaml_line(line, file_path):
+            self.logger.debug(f"Skipping YAML line {line_number} in {file_path}: contains excluded keywords")
+            return
+        
+        if self.should_skip_shell_line(line, file_path):
+            self.logger.debug(f"Skipping shell line {line_number} in {file_path}: contains excluded keywords")
             return
         
         found_secret = False
