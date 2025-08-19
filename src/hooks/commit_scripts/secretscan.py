@@ -952,6 +952,14 @@ class SecretScanner:
                 matches = re.finditer(pattern, line)
                 for match in matches:
                     value = match.group(0)
+                    # If the pattern specifies a capture group for the value, use it
+                    value_group_index = config.get('value_group')
+                    if isinstance(value_group_index, int):
+                        try:
+                            value = match.group(value_group_index)
+                        except IndexError:
+                            # Fallback to the full match if group is not present
+                            value = match.group(0)
                     
                     # Skip common non-secrets
                     if self.should_skip_value(value, file_path):
@@ -1197,6 +1205,12 @@ class SecretScanner:
             matches = re.finditer(pattern, line)
             for match in matches:
                 value = match.group(0)
+                value_group_index = config.get('value_group')
+                if isinstance(value_group_index, int):
+                    try:
+                        value = match.group(value_group_index)
+                    except IndexError:
+                        value = match.group(0)
                 
                 # Skip common non-secrets
                 if self.should_skip_value(value, file_path):

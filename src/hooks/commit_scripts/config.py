@@ -47,7 +47,8 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     
     # API Keys & Tokens - More specific patterns to avoid false positives
     # Only match when "api" and "key" are together, not just "key" alone
-    (r'(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[A-Za-z0-9_\-]{12,}', 'API Key', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5}),
+    # Capture only the value part (with optional quotes) so entropy is computed correctly on the secret itself
+    (r"(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?([A-Za-z0-9_\-]{12,})[\"\']?", 'API Key', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5, 'value_group': 1}),
     (r'(?i)bearer\s+[A-Za-z0-9_\-\.=]{20,}', 'Bearer Token', {'min_length': 20, 'require_entropy': True, 'threshold': 4.0}),
     (r'ghp_[0-9a-zA-Z]{36}', 'GitHub Personal Access Token', {'require_entropy': False}),  # Pattern is specific enough
     (r'github_pat_[0-9a-zA-Z]{82}', 'GitHub Fine-grained PAT', {'require_entropy': False}),  # Pattern is specific enough
