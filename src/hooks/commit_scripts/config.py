@@ -48,15 +48,24 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     # API Keys & Tokens - More specific patterns to avoid false positives
     # Only match when "api" and "key" are together, not just "key" alone
     # Capture only the value part (with optional quotes) so entropy is computed correctly on the secret itself
-    (r"(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?([A-Za-z0-9_\-]{12,})[\"\']?", 'API Key', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5, 'value_group': 1}),
+    # Improved pattern to handle both quoted and unquoted values with broader character set
+    (r"(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?([A-Za-z0-9_\-\.=+/]{12,})[\"\']?", 'API Key', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5, 'value_group': 1}),
+    # Additional pattern for unquoted API keys that might be followed by whitespace, semicolon, comma, or end of line
+    (r"(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*([A-Za-z0-9_\-\.=+/]{12,})(?:\s|$|;|,|\))", 'API Key (Unquoted)', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5, 'value_group': 1}),
     (r'(?i)bearer\s+[A-Za-z0-9_\-\.=]{20,}', 'Bearer Token', {'min_length': 20, 'require_entropy': True, 'threshold': 4.0}),
     (r'ghp_[0-9a-zA-Z]{36}', 'GitHub Personal Access Token', {'require_entropy': False}),  # Pattern is specific enough
     (r'github_pat_[0-9a-zA-Z]{82}', 'GitHub Fine-grained PAT', {'require_entropy': False}),  # Pattern is specific enough
     (r'sk-[a-zA-Z0-9]{48}', 'OpenAI API Key', {'require_entropy': False}),  # Pattern is specific enough
     (r'AIza[0-9A-Za-z\-_]{35}', 'Google API Key', {'require_entropy': False}),  # Pattern is specific enough
     
+    # Additional specific API key patterns for better detection
+    (r'(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?(sk-[a-zA-Z0-9]{48})[\"\']?', 'OpenAI API Key (Assignment)', {'require_entropy': False, 'value_group': 1}),
+    (r'(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?(ghp_[0-9a-zA-Z]{36})[\"\']?', 'GitHub PAT (Assignment)', {'require_entropy': False, 'value_group': 1}),
+    (r'(?i)(?:api[_\-\.]?key|apikey|api_key)[_\-\.]*\s*[=:]\s*[\"\']?(AIza[0-9A-Za-z\-_]{35})[\"\']?', 'Google API Key (Assignment)', {'require_entropy': False, 'value_group': 1}),
+    
     # JWT Tokens - No entropy check needed, structure is sufficient
-    (r'eyJ[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}', 'JWT Token', {'require_entropy': False}),
+    # Improved pattern to capture full JWT tokens including those with special characters
+    (r'eyJ[A-Za-z0-9-_=+/]{10,}\.[A-Za-z0-9-_=+/]{10,}\.[A-Za-z0-9-_=+/]{10,}', 'JWT Token', {'require_entropy': False}),
     
     # Generic Key patterns - Very high entropy requirement to filter out programming terms
     # This catches things like "key = 'some_actual_secret'" but filters out "key = 'buttonkey'"
@@ -76,6 +85,12 @@ PATTERNS: List[Tuple[str, str, Dict]] = [
     
     # Environment Variables - Check based on name
     (r'(?i)export\s+(\w+)\s*=\s*[^\s]{8,}', 'Environment Variable', {'min_length': 8, 'check_name': True}),
+    # API Keys in environment variable format
+    (r'(?i)(?:API_KEY|APIKEY)\s*=\s*([A-Za-z0-9_\-\.=+/]{12,})', 'API Key (Environment)', {'min_length': 12, 'require_entropy': True, 'threshold': 4.5, 'value_group': 1}),
+    # Specific API keys in environment variable format
+    (r'(?i)(?:API_KEY|APIKEY)\s*=\s*(sk-[a-zA-Z0-9]{48})', 'OpenAI API Key (Environment)', {'require_entropy': False, 'value_group': 1}),
+    (r'(?i)(?:API_KEY|APIKEY)\s*=\s*(ghp_[0-9a-zA-Z]{36})', 'GitHub PAT (Environment)', {'require_entropy': False, 'value_group': 1}),
+    (r'(?i)(?:API_KEY|APIKEY)\s*=\s*(AIza[0-9A-Za-z\-_]{35})', 'Google API Key (Environment)', {'require_entropy': False, 'value_group': 1}),
 ]
 
 # Load exclusions from configuration if available
